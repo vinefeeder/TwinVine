@@ -5,8 +5,8 @@ When you have an exact program url - just use envied as a command line call.
 When you only have the program name - just start with a search in vinefeeder.
 
 **usage**
-uv run envied dl itv dl https://www.itv.com/watch/the-fortune-hotel/10a5106/
 
+uv run envied dl itv dl https://www.itv.com/watch/the-fortune-hotel/10a5106
 uv run vinfeeder  - to open the interactive GUI
 
 **Installation**
