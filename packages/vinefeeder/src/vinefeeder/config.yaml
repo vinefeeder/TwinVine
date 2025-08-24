@@ -1,0 +1,6 @@
+BATCH_DOWNLOAD: False
+DOWNLOAD_ORCHESTRATOR: envied
+
+# Set to True if up/down cursor arrows stop working in the 
+# Terminal window after unschackle has downloaded.
+TERMINAL_RESET: False

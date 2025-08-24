@@ -1,0 +1,13 @@
+headers:
+  Accept-Language: en-US,en;q=0.8
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0
+
+endpoints:
+  login: https://nebula.tv/auth/login/
+  authorization: https://users.api.nebula.app/api/v1/authorization/
+  content: https://content.api.nebula.app/content/{slug}/
+  season: https://content.api.nebula.app/seasons/{id}/
+  video: https://content.api.nebula.app/content/videos/{slug}/
+  video_channel: https://content.api.nebula.app/video_channels/{id}/
+  video_channel_episodes: https://content.api.nebula.app/video_channels/{id}/video_episodes/?ordering=published_at
+  manifest: https://content.api.nebula.app/video_episodes/{video_id}/manifest.m3u8?token={jwt}&app_version=25.2.1&platform=web

@@ -1,0 +1,15 @@
+# pyproject.toml (root)
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+envied = { workspace = true }
+
+# Optional shared dev deps
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+    "scrapy>=2.13.3",
+]

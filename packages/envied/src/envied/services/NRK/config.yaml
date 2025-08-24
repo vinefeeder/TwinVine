@@ -1,0 +1,9 @@
+headers:
+  Accept-Language: nb-NO,de;q=0.8
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0
+
+endpoints:
+  content: https://psapi.nrk.no/tv/catalog/programs/{content_id}?contentGroup=adults&ageRestriction=None
+  metadata: https://psapi.nrk.no/playback/metadata/program/{content_id}
+#  manifest: https://psapi.nrk.no/playback/manifest/program/{content_id}
+  manifest: https://psapi.nrk.no/playback/manifest/program/{content_id}?eea-portability=true&ageRestriction=None

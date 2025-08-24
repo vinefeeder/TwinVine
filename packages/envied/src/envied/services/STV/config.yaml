@@ -1,0 +1,20 @@
+accounts:
+  drm: "6204867266001"
+  clear: "1486976045"
+
+headers:
+  drm:
+    BCOV-POLICY: BCpkADawqM32Q7lZg8ME0ydIOV8bD_9Ke2YD5wvY_T2Rq2TBtz6QQfpHtSAJTiDL-MiYAxyJVvScaKt82d1Q6b_wP6MG-O8SGQjRnwczfdsTesTZy-uj23uKv1vjHijtTeQC0DONN53zS38v
+    User-Agent: Dalvik/2.1.0 (Linux; U; Android 12; SM-A226B Build/SP1A.210812.016)
+    Host: edge.api.brightcove.com
+    Connection: keep-alive
+  clear:
+    BCOV-POLICY: BCpkADawqM2Dpx-ht5hP1rQqWFTcOTqTT5x5bSUlY8FaOO1_P8LcKxmL2wrFzTvRb3HzO2YTIzVDuoeLfqvFvp1dWRPnxKT8zt9ErkENYteaU9T6lz7OogjL8W8
+    User-Agent: Dalvik/2.1.0 (Linux; U; Android 12; SM-A226B Build/SP1A.210812.016)
+    Host: edge.api.brightcove.com
+    Connection: keep-alive
+
+endpoints:
+  base: https://player.api.stv.tv/v1/
+  playback: https://edge.api.brightcove.com/playback/v1/accounts/{accounts}/videos/{id}
+  search: https://api.swiftype.com/api/v1/public/engines/search.json

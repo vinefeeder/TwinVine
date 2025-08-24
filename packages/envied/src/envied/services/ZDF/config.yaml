@@ -1,0 +1,117 @@
+headers:
+  Accept-Language: de-DE,de;q=0.8
+  User-Agent: Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36 DMOST/2.0.0 (; LGE; webOSTV; WEBOS6.3.2 03.34.95; W6_lm21a;)
+
+endpoints:
+  graphql: https://api.zdf.de/graphql
+  ptmd_base: https://api.zdf.de
+
+meta:
+  # Known options:
+  #   ngplayer_2_5 (Web player - H.264 1080p + VP9 1080p))
+  #   smarttv_6 (HBBTV - H.264 1080p + H.265 HLG 2160p)
+  #   smarttv_7 (Unknown - same formats as smarttv_6)
+  #   android_native_5 (Android - H.264 1080p + VP9 1080p + H.265 HLG 2160p)
+  player_types:
+    - android_native_5
+
+queries:
+  VideoByCanonical: |
+    query VideoByCanonical($canonical: String!, $first: Int) {
+      videoByCanonical(canonical: $canonical) {
+        id
+        canonical
+        contentType
+        title
+        editorialDate
+        streamingOptions {
+          ad
+          ut
+          dgs
+          ov
+          ks
+          fsk
+        }
+        episodeInfo {
+          episodeNumber
+          seasonNumber
+        }
+        structuralMetadata {
+          isChildrenContent
+          publicationFormInfo {
+            original
+            transformed
+          }
+          visualDimension {
+            moods(first: $first) {
+              nodes {
+                mood
+              }
+            }
+          }
+        }
+        smartCollection {
+          id
+          canonical
+          title
+          collectionType
+          structuralMetadata {
+            contentFamily
+            publicationFormInfo {
+              original
+              transformed
+            }
+          }
+        }
+        seo {
+          title
+        }
+        availability {
+          fskBlocked
+        }
+        currentMediaType
+        subtitle
+        webUrl
+        publicationDate
+        currentMedia {
+          nodes {
+            ptmdTemplate
+            ... on VodMedia {
+              duration
+              aspectRatio
+              visible
+              geoLocation
+              highestVerticalResolution
+              streamAnchorTags {
+                nodes {
+                  anchorOffset
+                  anchorLabel
+                }
+              }
+              skipIntro {
+                startIntroTimeOffset
+                stopIntroTimeOffset
+                skipButtonDisplayTime
+                skipButtonLabel
+              }
+              vodMediaType
+              label
+              contentType
+            }
+            ... on LiveMedia {
+              geoLocation
+              tvService
+              title
+              start
+              stop
+              editorialStart
+              editorialStop
+              encryption
+              liveMediaType
+              label
+            }
+            id
+          }
+        }
+      }
+    }

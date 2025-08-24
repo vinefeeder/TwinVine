@@ -1,0 +1,4 @@
+headers:
+  user-agent: Chrome/96.0.4664.55
+  x-disco-client: WEB:UNKNOWN:dplus_us:2.44.4
+  x-disco-params: realm=go,siteLookupKey=dplus_us,bid=dplus,hn=www.discoveryplus.com,hth=,uat=false

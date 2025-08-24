@@ -1,0 +1,27 @@
+CLIENT_ID: disney-svod-3d9324fc
+CLIENT_VERSION: "9.10.0"
+
+API_KEY: "ZGlzbmV5JmFuZHJvaWQmMS4wLjA.bkeb0m230uUhv8qrAXuNu39tbE_mD5EEhM_NAcohjyA"
+CONFIG_URL: https://bam-sdk-configs.bamgrid.com/bam-sdk/v5.0/disney-svod-3d9324fc/android/v9.10.0/google/tv/prod.json
+
+PAGE_SIZE_SETS: 15
+PAGE_SIZE_CONTENT: 30
+SEARCH_QUERY_TYPE: ge
+BAM_PARTNER: disney
+EXPLORE_VERSION: v1.3
+DEVICE_FAMILY: browser
+DEVICE_PROFILE: tv
+APPLICATION_RUNTIME: android
+
+HEADERS:
+  User-Agent: BAMSDK/v9.10.0 (disney-svod-3d9324fc 2.26.2-rc1.0; v5.0/v9.10.0; android; tv)
+  x-application-version: google
+  x-bamsdk-platform-id: android-tv
+  x-bamsdk-client-id: disney-svod-3d9324fc
+  x-bamsdk-platform: android-tv
+  x-bamsdk-version: "9.10.0"
+  Accept-Encoding: gzip
+  Origin: https://www.disneyplus.com
+
+LICENSE: https://disney.playback.edge.bamgrid.com/widevine/v1/obtain-license
+PLAYREADY_LICENSE: https://disney.playback.edge.bamgrid.com/playready/v1/obtain-license.asmx

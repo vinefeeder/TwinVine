@@ -1,0 +1,23 @@
+headers:
+  User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0
+  Accept: '*/*'
+  Accept-Language: en-GBen;q=0.5
+  Access-Control-Request-Method: POST
+  Access-Control-Request-Headers: baggagecontent-typesentry-tracesessiontenant
+  Referer: https://tptvencore.co.uk/
+  Origin: https://tptvencore.co.uk
+  DNT: '1'
+  Connection: keep-alive
+  Sec-Fetch-Dest: empty
+  Sec-Fetch-Mode: cors
+  Sec-Fetch-Site: cross-site
+  Priority: u=4
+
+session:
+  api-key: zq5pyPd0RTbNg3Fyj52PrkKL9c2Af38HHh4itgZTKDaCzjAyhd
+
+endpoints:
+  login: https://prod.suggestedtv.com/api/client/v1/session/login
+  session: https://prod.suggestedtv.com/api/client/v1/session
+  search: https://prod.suggestedtv.com/api/client/v2/search/{query}
+  

@@ -1,0 +1,111 @@
+[build-system]
+requires = ["uv_build>=0.8.12,<0.9.0"]
+build-backend = "uv_build"
+
+[project]
+name = "envied"
+version = "1.4.2"
+description = "Modular Movie, TV, and Music Archival Software."
+authors = [{ name = "envied team" }]
+requires-python = ">=3.10,<3.13"
+readme = "README.md"
+license = "GPL-3.0-only"
+keywords = [
+    "python",
+    "downloader",
+    "drm",
+    "widevine",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = [
+    "appdirs>=1.4.4,<2",
+    "Brotli>=1.1.0,<2",
+    "click>=8.1.8,<9",
+    "construct>=2.8.8,<3",
+    "crccheck>=1.3.0,<2",
+    "jsonpickle>=3.0.4,<4",
+    "langcodes>=3.4.0,<4",
+    "lxml>=5.2.1,<6",
+    "pproxy>=2.7.9,<3",
+    "protobuf>=4.25.3,<5",
+    "pycaption>=2.2.6,<3",
+    "pycryptodomex>=3.20.0,<4",
+    "pyjwt>=2.8.0,<3",
+    "pymediainfo>=6.1.0,<7",
+    "pymp4>=1.4.0,<2",
+    "pymysql>=1.1.0,<2",
+    "pywidevine[serve]>=1.8.0,<2",
+    "PyYAML>=6.0.1,<7",
+    "requests[socks]>=2.31.0,<3",
+    "rich>=13.7.1,<14",
+    "rlaphoenix.m3u8>=3.4.0,<4",
+    "ruamel.yaml>=0.18.6,<0.19",
+    "sortedcontainers>=2.4.0,<3",
+    "subtitle-filter>=1.4.9,<2",
+    "Unidecode>=1.3.8,<2",
+    "urllib3>=2.2.1,<3",
+    "chardet>=5.2.0,<6",
+    "curl-cffi>=0.7.0b4,<0.8",
+    "pyplayready>=0.6.0,<0.7",
+    "httpx>=0.28.1,<0.29",
+    "cryptography>=45.0.0",
+    "subby",
+    "webvtt-py",
+    "isodate",
+    "beaupy",
+]
+
+[project.urls]
+Homepage = "https://github.com/envied-dl/envied"
+Repository = "https://github.com/envied-dl/envied"
+Issues = "https://github.com/envied-dl/envied/issues"
+Discussions = "https://github.com/envied-dl/envied/discussions"
+Changelog = "https://github.com/envied-dl/envied/blob/master/CHANGELOG.md"
+
+[project.scripts]
+envied = "envied.core.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=3.7.0,<4",
+    "mypy>=1.9.0,<2",
+    "mypy-protobuf>=3.6.0,<4",
+    "types-protobuf>=4.24.0.20240408,<5",
+    "types-PyMySQL>=1.1.0.1,<2",
+    "types-requests>=2.31.0.20240406,<3",
+    "isort>=5.13.2,<6",
+    "ruff~=0.3.7"
+]
+
+#[tool.hatch.build.targets.wheel]
+#packages = ["envied"]
+
+
+[tool.ruff]
+force-exclude = true
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W"]
+
+[tool.isort]
+line_length = 118
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+follow_imports = "silent"
+ignore_missing_imports = true
+no_implicit_optional = true
+
+[tool.uv.sources]
+subby = { git = "https://github.com/vevv/subby.git" }

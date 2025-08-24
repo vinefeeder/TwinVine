@@ -1,0 +1,21 @@
+[project]
+name = "vinefeeder"
+version = "0.1.0"
+description = "GUI front-end for envied"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "envied",         # resolved via [tool.uv.sources] at the workspace root
+  "PyQt6",          # or  GUI toolkit(s)
+  "rich",
+]
+
+[project.scripts]
+vinefeeder = "vinefeeder.__main__:main"  #  GUI entry point
+
+[build-system]
+requires = ["uv_build>=0.8.12,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.uv.package-data]
+vinefeeder = ["config.yaml", "services/**", "images/**"]

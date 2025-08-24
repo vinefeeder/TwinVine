@@ -1,0 +1,18 @@
+service: MY5
+
+options: 
+
+media_dict:
+  Films: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100117389032&vod_subgenres%5B%5D=6100117390032&vod_subgenres%5B%5D=6100117391032
+  Documentary: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres[]=6100110273032&vod_subgenres[]=6100105092032&vod_subgenres[]=6100105093032&vod_subgenres[]=6100105094032&vod_subgenres[]=6100105095032&vod_subgenres[]=6100105096032&vod_subgenres[]=6100105097032&vod_subgenres[]=6100110268032&vod_subgenres[]=6100110269032&vod_subgenres[]=6100110270032&vod_subgenres[]=6100110271032&vod_subgenres[]=6100110272032
+  Crime: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&limit=100&sort_by=popular&offset=0&vod_subgenres%5B%5D=7626766659032&vod_subgenres%5B%5D=7626766660032
+  Dramas & Soaps: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100110274032&vod_subgenres%5B%5D=6100110275032
+  Entertainment: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100112646032&vod_subgenres%5B%5D=6100110276032&vod_subgenres%5B%5D=6100110277032&vod_subgenres%5B%5D=6100112638032&vod_subgenres%5B%5D=6100112639032&vod_subgenres%5B%5D=6100112640032&vod_subgenres%5B%5D=6100112641032&vod_subgenres%5B%5D=6100112642032&vod_subgenres%5B%5D=6100112643032
+  Science and Nature: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100118658032&vod_subgenres%5B%5D=6100117395032&vod_subgenres%5B%5D=6100117396032&vod_subgenres%5B%5D=6100117397032
+  Sport: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100118660032
+  Travel: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100118664032&vod_subgenres%5B%5D=6100118662032&vod_subgenres%5B%5D=6100118663032
+  Real Lives: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100117393032
+  Lifestyle: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100114865032&vod_subgenres%5B%5D=6100114859032&vod_subgenres%5B%5D=6100114860032&vod_subgenres%5B%5D=6100114861032&vod_subgenres%5B%5D=6100114862032&vod_subgenres%5B%5D=6100114863032
+  News & Current Affairs: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6726148277032
+  Smithsonian: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&ids%5B%5D=7200164903527&ids%5B%5D=4365811271527&ids%5B%5D=4301348409527&ids%5B%5D=4783938314527&ids%5B%5D=4977961314527&ids%5B%5D=5600080444527&ids%5B%5D=4489370797527&ids%5B%5D=4617233242527&ids%5B%5D=6638446529527&ids%5B%5D=6275149260527&ids%5B%5D=7810836259527&ids%5B%5D=7741736837527&ids%5B%5D=8103343367527&ids%5B%5D=8103392205527&ids%5B%5D=8103519133527&ids%5B%5D=8103520030527&ids%5B%5D=5285427795527&ids%5B%5D=4867434237527&ids%5B%5D=4301367810527&ids%5B%5D=7059359470527&ids%5B%5D=8164734673527&ids%5B%5D=8164998660527&ids%5B%5D=8165160044527
+  Milkshake: https://corona.channel5.com/shows/search.json?platform=my5desktop&friendly=1&vod_subgenres%5B%5D=6100114867032

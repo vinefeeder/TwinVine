@@ -1,0 +1,10 @@
+headers:
+  user-agent: Mozilla/5.0 (Linux; Android 13; SM-A536E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36
+
+endpoints:
+  base_url: https://cbsdigital.cbs.com
+  token: ABBsaBMagMmYLUc9iXB0lXEKsUQ0/MwRn6z3Tg0KKQaH7Q6QGqJcABwlBP4XiMR1b0Q=
+
+assets: [HLS_AES, DASH_LIVE, DASH_CENC, DASH_CENC_HDR10, DASH_LIVE, DASH_TA, DASH_CENC_PS4]
+
+

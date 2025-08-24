@@ -1,0 +1,22 @@
+service_name: ITVX
+
+options: -q 720p 
+
+media_dict:
+  Films: https://www.itv.com/watch/collections/make-it-a-movie-night/2CIASIVXkb4A6R1XxJ4s1f
+  Top Picks: https://www.itv.com/watch/collections/top-picks/51Ry6KaT5pg9HYDJ8AqPwk
+  Gritty Thrillers: https://www.itv.com/watch/collections/gritty-thrillers/5lTuwNT5hAkUyQJdPabiGT
+  True Life: https://www.itv.com/watch/collections/true-life-drama/1nYAN4ipGU6L0qmgimh1lE
+  New: https://www.itv.com/watch/collections/fresh-in/7K0pfBiDFvOdBeHr7SnDzo
+  Comedy Drama: https://www.itv.com/watch/collections/comedy-drama/5lADfSZ7PP5dNeJ6BCW5Gb
+  Comedy: https://www.itv.com/watch/collections/show-me-the-funny/33idcDIeV32Cd3V7czYDeP
+  Entertainment & Reality: https://www.itv.com/watch/collections/top-picks/4qcfuXnvuom6zss67k7e6p
+  Football: https://www.itv.com/watch/collections/football/6iS0VOrNqLWQNCLL5T0nxL
+  Sport Top Picks: https://www.itv.com/watch/collections/top-picks/4CwpvlYDmVs0jumu0tA0Iu
+  Sport - Fresh In: https://www.itv.com/watch/collections/fresh-in/2h7nZMeKipItXfeVcGCGlo
+  Boxsets: https://www.itv.com/watch/collections/unmissable-boxsets/5vk4Kkk8zRTiG3cWI698fR
+  Kids - Top Picks: https://www.itv.com/watch/collections/kids-top-picks/4ZSxLvMbULBxNbA9AqY96R
+        
+    
+  
+

@@ -1,0 +1,260 @@
+# Group or Username to postfix to the end of all download filenames following a dash
+tag: user_tag
+
+# Enable/disable tagging with group name (default: true)
+tag_group_name: true
+
+# Enable/disable tagging with IMDB/TMDB/TVDB details (default: true)
+tag_imdb_tmdb: true
+
+# Set terminal background color (custom option not in CONFIG.md)
+set_terminal_bg: false
+
+# Set file naming convention
+#  true for style - Prime.Suspect.S07E01.The.Final.Act.Part.One.1080p.ITV.WEB-DL.AAC2.0.H.264
+#  false for style - Prime Suspect S07E01 The Final Act - Part One
+scene_naming: true
+
+# Whether to include the year in series names for episodes and folders (default: true)
+#  true for style - Show Name (2023) S01E01 Episode Name
+#  false for style - Show Name S01E01 Episode Name
+series_year: true
+
+# Check for updates from GitHub repository on startup (default: true)
+update_checks: true
+
+# How often to check for updates, in hours (default: 24)
+update_check_interval: 24
+
+# Title caching configuration
+# Cache title metadata to reduce redundant API calls
+title_cache_enabled: true  # Enable/disable title caching globally (default: true)
+title_cache_time: 1800  # Cache duration in seconds (default: 1800 = 30 minutes)
+title_cache_max_retention: 86400  # Maximum cache retention for fallback when API fails (default: 86400 = 24 hours)
+
+# Muxing configuration
+muxing:
+  set_title: false
+
+# Login credentials for each Service
+credentials:
+  # Direct credentials (no profile support)
+  EXAMPLE: email@example.com:password
+
+  # Per-profile credentials with default fallback
+  SERVICE_NAME:
+    default: default@email.com:password # Used when no -p/--profile is specified
+    profile1: user1@email.com:password1
+    profile2: user2@email.com:password2
+
+  # Per-profile credentials without default (requires -p/--profile)
+  SERVICE_NAME2:
+    john: john@example.com:johnspassword
+    jane: jane@example.com:janespassword
+
+  # You can also use list format for passwords with special characters
+  SERVICE_NAME3:
+    default: ["user@email.com", ":PasswordWith:Colons"]
+
+# Override default directories used across envied
+directories:
+  cache: Cache
+  cookies: Cookies
+  dcsl: DCSL # Device Certificate Status List
+  downloads: Downloads
+  logs: Logs
+  temp: Temp
+  wvds: WVDs
+  prds: PRDs
+  # Additional directories that can be configured:
+  # commands: Commands
+  services:
+    - /path/to/services
+    - /other/path/to/services
+  # vaults: Vaults
+  # fonts: Fonts
+
+# Pre-define which Widevine or PlayReady device to use for each Service
+cdm:
+  # Global default CDM device (fallback for all services/profiles)
+  default: WVD_1
+
+  # Direct service-specific CDM
+  DIFFERENT_EXAMPLE: PRD_1
+
+  # Per-profile CDM configuration
+  EXAMPLE:
+    john_sd: chromecdm_903_l3 # Profile 'john_sd' uses Chrome CDM L3
+    jane_uhd: nexus_5_l1 # Profile 'jane_uhd' uses Nexus 5 L1
+    default: generic_android_l3 # Default CDM for this service
+
+# Use pywidevine Serve-compliant Remote CDMs
+remote_cdm:
+  - name: "chrome"
+    device_name: chrome
+    device_type: CHROME
+    system_id: 27175
+    security_level: 3
+    host: https://domain.com/api
+    secret: secret_key
+  - name: "chrome-2"
+    device_name: chrome
+    device_type: CHROME
+    system_id: 26830
+    security_level: 3
+    host: https://domain-2.com/api
+    secret: secret_key
+
+# Key Vaults store your obtained Content Encryption Keys (CEKs)
+# Use 'no_push: true' to prevent a vault from receiving pushed keys
+# while still allowing it to provide keys when requested
+key_vaults:
+  - type: SQLite
+    name: Local
+    path: key_store.db
+  # Additional vault types:
+  # - type: API
+  #   name: "Remote Vault"
+  #   uri: "https://key-vault.example.com"
+  #   token: "secret_token"
+  #   no_push: true  # This vault will only provide keys, not receive them
+  # - type: MySQL
+  #   name: "MySQL Vault"
+  #   host: "127.0.0.1"
+  #   port: 3306
+  #   database: vault
+  #   username: user
+  #   password: pass
+  #   no_push: false  # Default behavior - vault both provides and receives keys
+
+# Choose what software to use to download data
+downloader: aria2c
+# Options: requests | aria2c | curl_impersonate | n_m3u8dl_re
+# Can also be a mapping:
+# downloader:
+#   NF: requests
+#   AMZN: n_m3u8dl_re
+#   DSNP: n_m3u8dl_re
+#   default: requests
+
+# aria2c downloader configuration
+aria2c:
+  max_concurrent_downloads: 4
+  max_connection_per_server: 3
+  split: 5
+  file_allocation: falloc # none | prealloc | falloc | trunc
+
+# N_m3u8DL-RE downloader configuration
+n_m3u8dl_re:
+  thread_count: 16
+  ad_keyword: "advertisement"
+  use_proxy: true
+
+# curl_impersonate downloader configuration
+curl_impersonate:
+  browser: chrome120
+
+# Pre-define default options and switches of the dl command
+dl:
+  best: true
+  sub_format: srt
+  downloads: 4
+  workers: 16
+  lang:
+    - en
+    - fr
+  EXAMPLE:
+    bitrate: CBR
+
+# Chapter Name to use when exporting a Chapter without a Name
+chapter_fallback_name: "Chapter {j:02}"
+
+# Case-Insensitive dictionary of headers for all Services
+headers:
+  Accept-Language: "en-US,en;q=0.8"
+  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.75 Safari/537.36"
+
+# Override default filenames used across envied
+filenames:
+  log: "envied_{name}_{time}.log"
+  config: "config.yaml"
+  root_config: "envied.yaml"
+  chapters: "Chapters_{title}_{random}.txt"
+  subtitle: "Subtitle_{id}_{language}.srt"
+
+# API key for The Movie Database (TMDB)
+tmdb_api_key: ""
+
+# conversion_method:
+# - auto (default): Smart routing - subby for WebVTT/SAMI, standard for others
+# - subby: Always use subby with advanced processing
+# - pycaption: Use only pycaption library (no SubtitleEdit, no subby)
+# - subtitleedit: Prefer SubtitleEdit when available, fall back to pycaption
+subtitle:
+  conversion_method: auto
+  sdh_method: auto
+
+# Configuration for pywidevine's serve functionality
+serve:
+  users:
+    secret_key_for_user:
+      devices:
+        - generic_nexus_4464_l3
+      username: user
+  # devices:
+  #   - '/path/to/device.wvd'
+
+# Configuration data for each Service
+services:
+  # Service-specific configuration goes here
+  # Profile-specific configurations can be nested under service names
+
+  # Example: with profile-specific device configs
+  EXAMPLE:
+    # Global service config
+    api_key: "service_api_key"
+
+    # Profile-specific device configurations
+    profiles:
+      john_sd:
+        device:
+          app_name: "AIV"
+          device_model: "SHIELD Android TV"
+      jane_uhd:
+        device:
+          app_name: "AIV"
+          device_model: "Fire TV Stick 4K"
+
+  # Example: Service with different regions per profile
+  SERVICE_NAME:
+    profiles:
+      us_account:
+        region: "US"
+        api_endpoint: "https://api.us.service.com"
+      uk_account:
+        region: "GB"
+        api_endpoint: "https://api.uk.service.com"
+
+# External proxy provider services
+proxy_providers:
+  nordvpn:
+    username: username_from_service_credentials
+    password: password_from_service_credentials
+    server_map:
+      - us: 12 # force US server #12 for US proxies
+  surfsharkvpn:
+    username: your_surfshark_service_username # Service credentials from https://my.surfshark.com/vpn/manual-setup/main/openvpn
+    password: your_surfshark_service_password # Service credentials (not your login password)
+    server_map:
+      - us: 3844 # force US server #3844 for US proxies
+      - gb: 2697 # force GB server #2697 for GB proxies
+      - au: 4621 # force AU server #4621 for AU proxies
+  basic:
+    GB:
+      - "socks5://username:password@bhx.socks.ipvanish.com:1080" # 1 (Birmingham)
+      - "socks5://username:password@gla.socks.ipvanish.com:1080" # 2 (Glasgow)
+    AU:
+      - "socks5://username:password@syd.socks.ipvanish.com:1080" # 1 (Sydney)
+      - "https://username:password@au-syd.prod.surfshark.com" # 2 (Sydney)
+      - "https://username:password@au-bne.prod.surfshark.com" # 3 (Brisbane)
+    BG: "https://username:password@bg-sof.prod.surfshark.com"

@@ -1,0 +1,6 @@
+endpoints:
+  login: https://account.bellmedia.ca/api/login/v2.1
+  auth: Y3R2LXdlYjpkZWZhdWx0
+  api: https://api.ctv.ca/space-graphql/graphql
+  license: https://license.9c9media.ca/widevine
+  search: https://www.ctv.ca/space-graphql/apq/graphql

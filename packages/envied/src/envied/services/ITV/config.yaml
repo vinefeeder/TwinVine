@@ -1,0 +1,7 @@
+headers:
+  User-Agent: okhttp/4.9.3
+
+endpoints:
+  login: https://auth.prd.user.itv.com/v2/auth
+  refresh: https://auth.prd.user.itv.com/token
+  search: https://textsearch.prd.oasvc.itv.com/search

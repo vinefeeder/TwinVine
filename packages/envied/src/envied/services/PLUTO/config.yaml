@@ -1,0 +1,7 @@
+endpoints:
+  auth: https://boot.pluto.tv/v4/start
+  search: https://service-media-search.clusters.pluto.tv/v1/search
+  series: https://service-vod.clusters.pluto.tv/v3/vod/series/{season_id}/seasons
+  episodes: http://api.pluto.tv/v2/episodes/{episode_id}/clips.json
+  movie: https://service-vod.clusters.pluto.tv/v4/vod/items?ids={video_id}
+  license: https://service-concierge.clusters.pluto.tv/v1/wv/alt
