@@ -12,7 +12,7 @@ uv run vinfeeder  - to open the interactive GUI
 
 **Installation**
 
-Uv is the package manager and loads both VineFeeder and Envied together.  Each program may be called.
+Uv is the package manager and loads both VineFeeder and Envied together.  Envied runs independenly or may be called by Vinefeeder.
 
 This installs the latest version directly from the GitHub repository:
 
