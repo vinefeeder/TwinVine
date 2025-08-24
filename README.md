@@ -1,5 +1,8 @@
 **TwinVine**
 
+TwinVine is the home of TWO packages  [Vinefeeder](https://github.com/vinefeeder/TwinVine/blob/main/packages/vinefeeder/src/vinefeeder/README.md)
+and [Envied](https://github.com/vinefeeder/TwinVine/blob/main/packages/envied/README.md)
+
 TwinVine is the easy way to handle your download tasks. 
 When you have an exact program url - just use envied as a command line call.
 When you only have the program name - just start with a search in vinefeeder.
