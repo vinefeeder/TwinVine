@@ -7,7 +7,7 @@ name = "envied"
 version = "1.4.2"
 description = "Modular Movie, TV, and Music Archival Software."
 authors = [{ name = "envied team" }]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11,<3.15"
 readme = "README.md"
 license = "GPL-3.0-only"
 keywords = [
@@ -57,10 +57,10 @@ dependencies = [
     "pyplayready>=0.6.0,<0.7",
     "httpx>=0.28.1,<0.29",
     "cryptography>=45.0.0",
-    "subby",
-    "webvtt-py",
-    "isodate",
-    "beaupy",
+    "subby>=0.3.21",
+    "webvtt-py=>0.5.1",
+    "isodate=>0.7.2",
+    "beaupy=>3.10.1",
 ]
 
 [project.urls]
