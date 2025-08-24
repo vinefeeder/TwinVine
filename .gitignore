@@ -1,3 +1,8 @@
+Cache/
+Logs/
+Downloads
+packages/envied/src/envied/logs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
