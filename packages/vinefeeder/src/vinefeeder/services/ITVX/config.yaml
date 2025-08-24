@@ -1,6 +1,6 @@
 service_name: ITVX
 
-options: -q 720p 
+options: 
 
 media_dict:
   Films: https://www.itv.com/watch/collections/make-it-a-movie-night/2CIASIVXkb4A6R1XxJ4s1f
