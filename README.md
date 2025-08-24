@@ -5,11 +5,11 @@ When you have an exact program url - just use envied as a command line call.
 When you only have the program name - just start with a search in vinefeeder.
 
 **usage**
-
+```
 uv run envied dl itv (program url)
 
 uv run vinfeeder  - to open the interactive GUI  for search etc
-
+```
 **Installation**
 
 Uv is the package manager and loads both VineFeeder and Envied together.  Envied runs independenly or may be called by Vinefeeder.
