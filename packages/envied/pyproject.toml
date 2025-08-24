@@ -61,6 +61,7 @@ dependencies = [
     "webvtt-py>=0.5.1",
     "isodate>=0.7.2",
     "beaupy>=3.10.1",
+    "scrapy>=2.13.3",
 ]
 
 [project.urls]
