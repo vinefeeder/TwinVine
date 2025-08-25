@@ -38,6 +38,15 @@ uv sync
 uv run vinefeeder --help or
 uv run envied --help
 ```
+**Configuration**
+
+Run this line inside the VineFeeder folder:
+```
+cp packages/envied/src/envied/envied-working-example.yaml packages/envied/src/envied/envied.yaml 
+```
+This ensures you have your own working copy of envied.yaml. It may be edited and will not be over-written during any updates.  
+  
+That's it; uv run vinfeeder to get started!
 
 Images
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder1.png)
