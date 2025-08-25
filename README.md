@@ -1,8 +1,6 @@
 **TwinVine**
 
-**NOT READY FOR RELEASE - Testing only**
-
-**Beta in testing** Linux mainly OK. Windows has Path issues.
+**Beta in testing** .
 
 ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeederA.png)
 
@@ -11,14 +9,19 @@ TwinVine is the home of TWO packages  [Vinefeeder](https://github.com/vinefeeder
 and [Envied](https://github.com/vinefeeder/TwinVine/blob/main/packages/envied/README.md)
 
 TwinVine is the easy way to handle your download tasks. 
-When you have an exact program url - just use envied as a command line call.
-When you only have the program name - just start with a search in vinefeeder.
+* When you have an exact program url - just use envied as a command line call.
+* When you only have the program name - just start with a search in vinefeeder.
+* When you dont know what you want; use the browse function.
+* Browse media categories like Film, Drama or Sport, for a selected service.
+* Batch Mode: select multiple downloads from various services and download all together.
+ 
+
 
 **usage**
 ```
-uv run envied dl itv (program url)
+uv run envied dl (options) (service) (program url)
 
-uv run vinfeeder  - to open the interactive GUI  for search etc
+uv run vinfeeder  - to open the interactive GUI for search, browse, etc.
 ```
 **Installation**
 
@@ -42,6 +45,12 @@ Images
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder4.png)
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder5.png)
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder6.png)
+    ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder7.png)
+    ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder8.png)
+    ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder9.png)
+    ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder10.png)
+    ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder11.png)
+    
 
 
 
