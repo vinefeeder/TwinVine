@@ -48,6 +48,17 @@ This ensures you have your own working copy of envied.yaml. It may be edited and
   
 That's it; uv run vinfeeder to get started!
 
+**Services**
+
+Vinefeeder currently has 8 services for which search, browse and list-select are available  
+  
+  ALL4  BBC  ITVX  MY5  STV  TPTV  TVNZ  U 
+  
+Envied has   
+
+ALL4  AUBC  CBS  DSCP  iP   MAX   MY5   NF   PCOK   ROKU  SPOT  TPTV  TVNZ  YTBE
+ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
+
 Images
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder1.png)
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder2.png)
