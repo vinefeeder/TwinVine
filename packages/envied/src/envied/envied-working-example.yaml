@@ -71,7 +71,7 @@ key_vaults:
 
 
 # Choose what software to use to download data
-downloader: n_m3u8dl_re
+downloader: aria2c # Caution: n_m3u8dl_re has issues on Windows
 # Options: requests | aria2c | curl_impersonate | n_m3u8dl_re
 # Can also be a mapping:
 # downloader:
