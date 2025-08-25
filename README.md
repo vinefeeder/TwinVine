@@ -1,6 +1,8 @@
-**TwinVine**
+**TwinVine  NOT READY FOR RELEASE - Testing only**
 
-**Beta in testing** Linux OK. Windows Path issues.
+**Beta in testing** Linux mainly OK. Windows has Path issues.
+
+
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeederA.png)
 
 
