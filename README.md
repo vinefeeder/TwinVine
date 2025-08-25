@@ -27,7 +27,16 @@ uv run vinfeeder  - to open the interactive GUI for search, browse, etc.
 
 Uv is the package manager and loads both VineFeeder and Envied together.  Envied runs independenly or may be called by Vinefeeder.
 
-This installs the latest version directly from the GitHub repository:
+If you do not alrealy have uv as a python package intall it first using pip
+```
+pip install uv
+
+or
+
+python3 -m pip install uv
+```
+
+Then install TwinVine the following installs the latest version directly from the GitHub repository:
 
 ```shell
 git clone https://github.com/vinefeeder/TwinVine.git
@@ -58,6 +67,7 @@ Envied has
 
 ALL4  AUBC  CBS  DSCP  iP   MAX   MY5   NF   PCOK   ROKU  SPOT  TPTV  TVNZ  YTBE
 ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
+Not all have been tested
 
 Images
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder1.png)
