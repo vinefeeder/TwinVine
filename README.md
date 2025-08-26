@@ -75,7 +75,7 @@ ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
 Not all have been tested
 
 # Newbies
-If you are totally new to downloading there are software items that all downloaders call upon to carry out their functions. TwinVine is not different.
+If you are totally new to downloading there are software items that all downloaders call upon to carry out their functions. TwinVine is no different.
 
 You need to have some binaries installed and on your system's Path.
 For your security find them from source.
@@ -108,6 +108,7 @@ Images
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder9.png)
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder10.png)
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder11.png)
+    ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeederB.png)
     
 
 
