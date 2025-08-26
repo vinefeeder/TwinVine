@@ -1,4 +1,9 @@
-# VineFeeder
+# VineFeeder  in TwinVine
+
+**NOTE**     
+*These are the full installation instructions if VineFeeder were to be installed as a stand-alone program.* 
+
+*TwinVine has already done the installation.*
 
 VineFeeder is a dynamic Python-based application and **framework** that presents a graphical user interface (GUI) to act as a front-end for Devine (https://github.com/devine-dl/devine) or envied (https://github.com/envied-dl/envied)  - each a video-downloader, envied being a fork of devine.
 
