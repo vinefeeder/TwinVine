@@ -3,7 +3,7 @@ Logs/
 Downloads
 packages/envied/src/envied/logs/
 packages/envied/src/envied/envied.yaml
-images/
+images/*
 tools/
 batch.txt
 # Byte-compiled / optimized / DLL files
