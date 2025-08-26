@@ -74,6 +74,29 @@ ALL4  AUBC  CBS  DSCP  iP   MAX   MY5   NF   PCOK   ROKU  SPOT  TPTV  TVNZ  YTBE
 ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
 Not all have been tested
 
+# Newbies
+If you are totally new to downloading there are software items that all downloaders call upon to carry out their functions. TwinVine is not different.
+
+You need to have some binaries installed and on your system's Path.
+For your security find them from source.
+
+They need to be on your system's Path, 
+For linux installng to  /home/user/.local/bin/   is ideal
+For Windows it is less clear cut.
+If you know how to create a folder and then add the folder to
+the Windows systems Environment Path, then do that and place all your binaries
+in the new folder.
+(I have cheated in the past and used C:\Windows\System32\)
+
+The binary list:
+* Python 3.11 or later installed with Linux: or Windows install from the Windows Store
+* ffmpeg (https://github.com/FFmpeg/FFmpeg) https://www.videohelp.com/software/ffmpeg  or Linux distro
+* N-m3u8DL-RE (https://github.com/nilaoda/N_m3u8DL-RE/releases)
+* mp4decrypt (https://github.com/axiomatic-systems/Bento4)
+* MKVMerge from MKVToolNix  https://mkvtoolnix.download/downloads.html  https://www.videohelp.com/software/MKVToolNix
+* Shaka-packager  https://github.com/shaka-project/shaka-packager/releases  rename the binary to shaka-packager
+
+
 Images
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder1.png)
     ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeeder2.png)
