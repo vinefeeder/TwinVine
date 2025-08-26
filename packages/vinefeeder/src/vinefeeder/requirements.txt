@@ -1,9 +1,0 @@
-beaupy
-click
-httpx
-jmespath
-PyQt6
-PyQt6_sip
-PyYAML
-rich
-Scrapy

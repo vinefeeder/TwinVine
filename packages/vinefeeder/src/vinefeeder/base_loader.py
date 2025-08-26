@@ -40,12 +40,11 @@ class BaseLoader:
         
         myconfig, _ = load_config_with_fallback()
         self.BATCH_DOWNLOAD = myconfig['BATCH_DOWNLOAD']
-        #self.DOWNLOAD_ORCHESTRATOR = myconfig['DOWNLOAD_ORCHESTRATOR']
         self.TERMINAL_RESET = myconfig['TERMINAL_RESET']
-        
+          
             
     def reset_terminal(self):
-        if self.DOWNLOAD_ORCHESTRATOR == "envied" and not self.BATCH_DOWNLOAD:
+        if  not self.BATCH_DOWNLOAD:
             if os.name == 'nt':  # Windows
                 os.system('cls')
                 # Optionally, reinitialize ANSI or console buffer here if needed
@@ -406,16 +405,12 @@ class BaseLoader:
     def clean_terminal(self):
         # clear for next use
         time.sleep(1)
+        
         if self.TERMINAL_RESET:
+            console.print(f"[{catppuccin_mocha['text2']}]Preparing to reset Terminal[/]")
+            time.sleep(5)
             self.reset_terminal()
-        '''if os.name == "posix":
-            # os.system('clear')
-            print("Ready!")
-            return
-        else:
-            reset_terminal()
-            print("Ready!")
-            return'''
+        
         console.print(f"[{catppuccin_mocha['pink']}]Ready![/]")
         
     def runsubprocess(self, command):

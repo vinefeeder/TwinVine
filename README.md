@@ -1,6 +1,6 @@
 **TwinVine**
 
-**Beta in testing** .
+**Beta** .
 
 ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeederA.png)
 
@@ -27,7 +27,7 @@ uv run vinfeeder  - to open the interactive GUI for search, browse, etc.
 
 Uv is the package manager and loads both VineFeeder and Envied together.  Envied runs independenly or may be called by Vinefeeder.
 
-If you do not alrealy have uv as a python package intall it first using pip
+If you do not alrealy have uv as a python package install it first, using pip -
 ```
 pip install uv
 
@@ -36,7 +36,7 @@ or
 python3 -m pip install uv
 ```
 
-Then install TwinVine the following installs the latest version directly from the GitHub repository:
+Then install TwinVine; the following installs the latest version directly from the GitHub repository:
 
 ```shell
 git clone https://github.com/vinefeeder/TwinVine.git
@@ -55,7 +55,12 @@ cp packages/envied/src/envied/envied-working-example.yaml packages/envied/src/en
 ```
 This ensures you have your own working copy of envied.yaml. It may be edited and will not be over-written during any updates.  
   
-That's it; uv run vinfeeder to get started!
+That's it; uv run vinfeeder to get started!  
+
+**Linux**
+
+Linux systems are known to screen freeze after envied has finished a download.
+The top level vinfeeder config file at  TwinVine/packages/vinefeeder/src/vinefeeder/config.yaml should have   TERMINAL_RESET: True   set.
 
 **Services**
 
