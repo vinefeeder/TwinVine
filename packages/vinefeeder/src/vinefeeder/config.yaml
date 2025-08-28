@@ -1,5 +1,2 @@
-BATCH_DOWNLOAD: False
-
-# Set to True if up/down cursor arrows stop working in the 
-# Terminal window after envied has downloaded. 
-TERMINAL_RESET: False
+BATCH_DOWNLOAD: true
+TERMINAL_RESET: true

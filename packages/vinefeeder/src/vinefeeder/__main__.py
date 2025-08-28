@@ -17,32 +17,16 @@ from rich.console import Console
 from .parsing_utils import prettify
 import click
 import subprocess
-from .batchloader import batchload
+#from .batchloader import batchload
 import pkgutil
-#import inspect
+from .pretty import catppuccin_mocha
+from .config_loader import load_config_with_fallback, get_bool, project_config_path, save_project_config
 
 PAGE_SIZE = 8  # size of beaupy pagination
 
 
 console = Console()
 
-catppuccin_mocha = {
-    # Colors based on "CatppuccinMocha" from Gogh themes
-    "bg": "rgb(30,30,46)",
-    "text": "rgb(205,214,244)",
-    "text2": "rgb(162,169,193)",  # slightly darker
-    "black": "rgb(69,71,90)",
-    "bright_black": "rgb(88,91,112)",
-    "red": "rgb(243,139,168)",
-    "green": "rgb(166,227,161)",
-    "yellow": "rgb(249,226,175)",
-    "blue": "rgb(137,180,250)",
-    "pink": "rgb(245,194,231)",
-    "cyan": "rgb(148,226,213)",
-    "gray": "rgb(166,173,200)",
-    "bright_gray": "rgb(186,194,222)",
-    "dark_gray": "rgb(54,54,84)",
-}
 
 
 """
@@ -73,18 +57,11 @@ Example usage:
 _PKG_NAME = "vinefeeder"
 _CFG_NAME = "config.yaml"
 
-def _user_config_dir() -> Path:
-    # XDG on Linux; AppData\Roaming on Windows; ~/.config on others
-    if os.name == "nt":
-        base = os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming")
-        return Path(base) / "VineFeeder"
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    return (Path(xdg) if xdg else Path.home() / ".config") / "vinefeeder"
 
-def _user_config_path() -> Path:
-    return _user_config_dir() / _CFG_NAME
 
-def load_config_with_fallback() -> tuple[dict, Path | None]:
+
+
+'''def load_config_with_fallback() -> tuple[dict, Path | None]:
     """
     Returns (config_dict, user_path_if_used_or_None).
     Prefers user config; falls back to package-bundled default.
@@ -97,15 +74,9 @@ def load_config_with_fallback() -> tuple[dict, Path | None]:
     # packaged default
     with resources.files(_PKG_NAME).joinpath(_CFG_NAME).open("rb") as f:
         data = yaml.safe_load(f) or {}
-    return data, None
+    return data, None'''
 
-def save_user_config(cfg: dict) -> Path:
-    """Writes config to the user path, creating the directory as needed."""
-    p = _user_config_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(cfg, f, default_flow_style=False)
-    return p
+
 
 def derive_loader_class_name(service_modname: str) -> str:
     """
@@ -233,7 +204,7 @@ class VineFeeder(QWidget):
 
         # Run Batch Button
         self.run_batch_button = QPushButton("Run Batch")
-        self.run_batch_button.clicked.connect(batchload)
+        self.run_batch_button.clicked.connect(self._run_batch_button_handler)
         self.run_batch_button.setEnabled(False)  # Initially disabled
         self.style_batch_button(self.run_batch_button)
         self.sechighlighted_layout.addWidget(self.run_batch_button)
@@ -268,28 +239,27 @@ class VineFeeder(QWidget):
 
         self.update_batch_file_indicator()
 
+    def _run_batch_button_handler(self):
+        from .batchloader import batchload
+        batchload()
 
-    def toggle_batch_mode(self):
-        state = self.batch_slider.value() == 1
-
+    def toggle_batch_mode(self, value=None):
+        state = (value == 1) if value is not None else (self.batch_slider.value() == 1)
         if state:
-            self.batch_label.setStyleSheet("color: lightgreen; padding-left: 5px; border: none;")
+            self.batch_label.setStyleSheet("color: lightgreen; padding-left: 5px; border: none")
         else:
             self.toggle_dark_mode()
 
         self.run_batch_button.setEnabled(state)
         self.update_batch_file_indicator()
 
-        # Update config (write to the *user* config location)
+        # Persist to config
         try:
             cfg, _ = load_config_with_fallback()
             cfg["BATCH_DOWNLOAD"] = state
-            save_user_config(cfg)
+            save_project_config(cfg)
         except Exception as e:
             console.print(f"[{catppuccin_mocha['text2']}][warning] Could not update config.yaml: {e}[/]")
-    
-
-
 
 
     def style_batch_button(self, button):

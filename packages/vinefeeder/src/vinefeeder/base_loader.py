@@ -4,14 +4,12 @@ from beaupy import select, select_multiple
 from rich.console import Console
 from abc import abstractmethod
 import os
-import platform
 import sys
 import time
 from .pretty import create_clean_panel
 from .pretty import catppuccin_mocha
-import yaml
 import subprocess
-from .__main__ import load_config_with_fallback, save_user_config
+from .config_loader import load_config_with_fallback, get_bool
 
 console = Console()
 
@@ -38,16 +36,15 @@ class BaseLoader:
         self.browse_video_list = []
         self.category = None
         
-        myconfig, _ = load_config_with_fallback()
-        self.BATCH_DOWNLOAD = myconfig['BATCH_DOWNLOAD']
-        self.TERMINAL_RESET = myconfig['TERMINAL_RESET']
-          
+        cfg, _ = load_config_with_fallback()
+        self.BATCH_DOWNLOAD = bool(cfg.get("BATCH_DOWNLOAD", False))
+        self.TERMINAL_RESET = bool(cfg.get("TERMINAL_RESET", False))
+
             
     def reset_terminal(self):
-        if  not self.BATCH_DOWNLOAD:
+        if  self.TERMINAL_RESET:
             if os.name == 'nt':  # Windows
                 os.system('cls')
-                # Optionally, reinitialize ANSI or console buffer here if needed
             else:  # Unix/Linux/macOS
                 try:
                     subprocess.run(['reset'], check=True)
@@ -406,7 +403,7 @@ class BaseLoader:
         # clear for next use
         time.sleep(1)
         
-        if self.TERMINAL_RESET:
+        if self.TERMINAL_RESET and not self.BATCH_DOWNLOAD:
             console.print(f"[{catppuccin_mocha['text2']}]Preparing to reset Terminal[/]")
             time.sleep(5)
             self.reset_terminal()
