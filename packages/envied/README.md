@@ -18,62 +18,18 @@ The prime reason for the existence of envied is a --select-titles function.
 
 If you already use envied you'll probably just want to replace envied/envied/envied.yaml
 with your own. But the exisiting yaml is close to working - just needs a few directory locations.
-## Select Titles Feature
-![--select-titles option](https://github.com/vinefeeder/envied/blob/main/img/envied1.png)
 
-## Key Features
 
-- 🚀 **Easy Installation** - Simple UV installation
-- 🎥 **Multi-Media Support** - Movies, TV episodes, and music
-- 🛠️ **Built-in Parsers** - DASH/HLS and ISM manifest support
-- 🔒 **DRM Support** - Widevine and PlayReady integration
-- 🌈 **HDR10+DV Hybrid** - Hybrid Dolby Vision injection via [dovi_tool](https://github.com/quietvoid/dovi_tool)
-- 💾 **Flexible Storage** - Local and remote key vaults
-- 👥 **Multi-Profile Auth** - Support for cookies and credentials
-- 🤖 **Smart Naming** - Automatic P2P-style filename structure
-- ⚙️ **Configurable** - YAML-based configuration
-- ❤️ **Open Source** - Fully open-source with community contributions welcome
-
-## Quick Start
-
-### Installation
-
-This installs the latest version directly from the GitHub repository:
-
-```shell
-git clone https://github.com/vinefeeder/envied.git
-cd envied
-uv sync
-uv run envied --help
-```
-
-### Install envied as a global (per-user) tool
-
-```bash
-uv tool install git+https://github.com/vinefeeder/envied.git
-# Then run:
-uvx envied --help   # or just `envied` once PATH updated
-```
-
-> [!NOTE]
-> After installation, you may need to add the installation path to your PATH environment variable if prompted.
-
-> **Recommended:** Use `uv run envied` instead of direct command execution to ensure proper virtual environment activation.
+ **Recommended:** Use `uv run envied` instead of direct command execution to ensure proper virtual environment activation.
 
 
 ### Basic Usage
 
 ```shell
-# Check available commands
-uv run envied --help
 
-# Configure your settings
-git clone https://github.com/vinefeeder/envied.git
-cd envied
-uv sync
-uv run envied --help
 
 # Download content (requires configured services)
+# from inside the TwinVine top level folder:-
 uv run envied dl SERVICE_NAME CONTENT_ID
 ```
 

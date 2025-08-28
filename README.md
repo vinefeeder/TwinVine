@@ -72,7 +72,12 @@ Envied has
 
 ALL4  AUBC  CBS  DSCP  iP   MAX   MY5   NF   PCOK   ROKU  SPOT  TPTV  TVNZ  YTBE
 ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
-Not all have been tested
+Not all have been tested  
+  
+**Other README's""
+    TwinVine/packages/vinefeeder/src/vinefeeder/README.md  
+    for details for confuring Envied download options on a service by service basis.
+    TwinVine/packages/envied/README.md  links to wiki (unshackle - envied's parent)
 
 # Newbies
 If you are totally new to downloading there are software items that all downloaders call upon to carry out their functions. TwinVine is no different.
