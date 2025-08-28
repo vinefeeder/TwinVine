@@ -1,6 +1,5 @@
 **TwinVine**
 
-**Beta** .
 
 ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/vinefeederA.png)
 
