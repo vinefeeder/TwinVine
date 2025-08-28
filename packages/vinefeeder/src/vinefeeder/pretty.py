@@ -1,5 +1,6 @@
 from rich.console import Console
 from rich.panel import Panel
+from . import __version__
 
 
 # thanks rlaphoenix for catppuccin_mocha color scheme
@@ -32,12 +33,14 @@ def pretty_print():
         f"| | / (_)__  ___ / __/__ ___ ___/ /__ ____" "\n"
         f"| |/ / / _ \\/ -_) _// -_) -_) _  / -_) __/" "\n"
         f"|___/_/_//_/\\__/__/  \\__/\\__/\\_,_/\\__/_/     [/]" + "\n\n"
-        f"[{catppuccin_mocha['text2']}]© 2024-25  A_n_g_e_l_a[/]\n\n"
+        f"[{catppuccin_mocha['text2']}]© 2024-25  A_n_g_e_l_a[/]\n"
+        f"[{catppuccin_mocha['gray']}]TwinVine version {__version__}[/]\n\n"
         f"[{catppuccin_mocha['pink']}]driving ...[/]\n\n"
         f"[{catppuccin_mocha['text2']}]░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
         f"[{catppuccin_mocha['text2']}]░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
         f"[{catppuccin_mocha['text2']}]░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n\n"
         f"[{catppuccin_mocha['gray']}]© 2019-2025 rlaphoenix [/]" + "\n"
+
  
 
         #f"[{catppuccin_mocha['blue']}]https://github.com/vinefeeder[/]"
