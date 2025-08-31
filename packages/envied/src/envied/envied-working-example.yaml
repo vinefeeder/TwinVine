@@ -14,6 +14,9 @@ decryption: mp4decrypt
 scene_naming: false
 series_year: false
 
+# Widevine pssh display; fold, crop or ellipsis
+pssh_display: ellipsis
+
 # Login credentials for each Service
 credentials:
   ALL4: email:password
