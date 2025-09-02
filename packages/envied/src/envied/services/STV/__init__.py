@@ -166,11 +166,11 @@ class STV(Service):
                 source
                 for source in data["sources"]
                 if source.get("type") == "application/dash+xml"
-                and source.get("key_systems").get("com.wienvied.alpha")),
+                and source.get("key_systems").get("com.widevine.alpha")),
                 None,
             )
 
-            self.license = key_systems["key_systems"]["com.wienvied.alpha"]["license_url"] if key_systems else None
+            self.license = key_systems["key_systems"]["com.widevine.alpha"]["license_url"] if key_systems else None
 
         manifest = self.trim_duration(source_manifest)
         tracks = DASH.from_text(manifest, source_manifest).to_tracks(title.language)
