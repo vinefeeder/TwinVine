@@ -406,7 +406,7 @@ class BaseLoader:
         if self.TERMINAL_RESET and not self.BATCH_DOWNLOAD:
             console.print(f"[{catppuccin_mocha['text2']}]Preparing to reset Terminal[/]")
             time.sleep(5)
-            #self.reset_terminal()
+            self.reset_terminal()
         
         console.print(f"[{catppuccin_mocha['pink']}]Ready![/]")
         
