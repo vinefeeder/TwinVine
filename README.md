@@ -20,7 +20,7 @@ TwinVine is the easy way to handle your download tasks.
 ```
 uv run envied dl (options) (service) (program url)
 
-uv run vinfeeder  - to open the interactive GUI for search, browse, etc.
+uv run vinefeeder  - to open the interactive GUI for search, browse, etc.
 ```
 **Installation**
 
@@ -54,12 +54,12 @@ cp packages/envied/src/envied/envied-working-example.yaml packages/envied/src/en
 ```
 This ensures you have your own working copy of envied.yaml. It may be edited and will not be over-written during any updates.  
   
-That's it; uv run vinfeeder to get started!  
+That's it; uv run vinefeeder to get started!  
 
 **Linux**
 
 Linux systems are known to screen freeze after envied has finished a download.
-The top level vinfeeder config file at  TwinVine/packages/vinefeeder/src/vinefeeder/config.yaml should have   TERMINAL_RESET: True   set.
+The top level vinefeeder config file at  TwinVine/packages/vinefeeder/src/vinefeeder/config.yaml should have   TERMINAL_RESET: True   set.
 
 **Services**
 
