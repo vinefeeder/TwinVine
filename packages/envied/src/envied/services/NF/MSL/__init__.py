@@ -26,7 +26,7 @@ from .schemes import EntityAuthenticationSchemes  # noqa: F401
 from .schemes import KeyExchangeSchemes
 from .schemes.EntityAuthentication import EntityAuthentication
 from .schemes.KeyExchangeRequest import KeyExchangeRequest
-# from vinetrimmer.utils.widevine.device import RemoteDevice
+# from vinetrimmer.utils.wienvied.device import RemoteDevice
 
 class MSL:
     log = logging.getLogger("MSL")

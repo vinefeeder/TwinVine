@@ -10,13 +10,13 @@ from rich.padding import Padding
 from rich.text import Text
 from urllib3.exceptions import InsecureRequestWarning
 
-from . import __version__
-from .commands import Commands
-from .config import config
-from .console import ComfyRichHandler, console
-from .constants import context_settings
-from .update_checker import UpdateChecker
-from .utilities import rotate_log_file
+from envied.core import __version__
+from envied.core.commands import Commands
+from envied.core.config import config
+from envied.core.console import ComfyRichHandler, console
+from envied.core.constants import context_settings
+from envied.core.update_checker import UpdateChecker
+from envied.core.utilities import rotate_log_file
 
 LOGGING_PATH = None
 
@@ -67,15 +67,35 @@ def main(version: bool, debug: bool, log_path: Path) -> None:
             r"░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n" ,
                 style="ascii.art",
             ),
-            "v 3.3.3 Copyright © 2019-2025 rlaphoenix"
-            + f"\nv [repr.number]{__version__}[/] - unshackle",
+
+            f"\nv [repr.number]{__version__}[/] - https://github.com/unshackle-dl/unshackle",
         ),
         (1, 11, 1, 10),
         expand=True,
     ),
     justify="center",
 )
- 
+
+
+    '''if version:
+        return
+
+    if config.update_checks:
+        try:
+            latest_version = UpdateChecker.check_for_updates_sync(__version__)
+            if latest_version:
+                console.print(
+                    f"\n[yellow]⚠️  Update available![/yellow] "
+                    f"Current: {__version__} → Latest: [green]{latest_version}[/green]",
+                    justify="center",
+                )
+                console.print(
+                    "Visit: https://github.com/envied-dl/envied/releases/latest\n",
+                    justify="center",
+                )
+        except Exception:
+            pass
+    '''
 
 @atexit.register
 def save_log():

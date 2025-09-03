@@ -4,4 +4,4 @@ headers:
 endpoints:
   base_url: https://www.rte.ie
   feed: https://feed.entertainment.tv.theplatform.eu
-  license: https://widevine.entitlement.eu.theplatform.com/wv/web/ModularDrm
+  license: https://wienvied.entitlement.eu.theplatform.com/wv/web/ModularDrm

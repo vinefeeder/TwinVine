@@ -2,8 +2,8 @@ from typing import Optional
 
 import click
 
-from .config import config
-from .utilities import import_module_by_path
+from envied.core.config import config
+from envied.core.utilities import import_module_by_path
 
 _COMMANDS = sorted(
     (path for path in config.directories.commands.glob("*.py") if path.stem.lower() != "__init__"), key=lambda x: x.stem

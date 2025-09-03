@@ -45,7 +45,7 @@ class RTE(Service):
 
     """
 
-    # GEOFENCE = ("ie",)
+    #GEOFENCE = ("ie",)
 
     @staticmethod
     @click.command(name="RTE", short_help="https://www.rte.ie/player/", help=__doc__)

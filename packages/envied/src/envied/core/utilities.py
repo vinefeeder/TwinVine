@@ -22,9 +22,9 @@ from langcodes import Language, closest_match
 from pymp4.parser import Box
 from unidecode import unidecode
 
-from .cacher import Cacher
-from .config import config
-from .constants import LANGUAGE_MAX_DISTANCE
+from envied.core.cacher import Cacher
+from envied.core.config import config
+from envied.core.constants import LANGUAGE_MAX_DISTANCE
 
 
 def rotate_log_file(log_path: Path, keep: int = 20) -> Path:

@@ -172,14 +172,14 @@ class TVNZ(Service):
             )
 
             self.license = next((
-                x["key_systems"]["com.widevine.alpha"]["license_url"]
+                x["key_systems"]["com.wienvied.alpha"]["license_url"]
                 for x in data["sources"]
-                if x.get("key_systems").get("com.widevine.alpha")),
+                if x.get("key_systems").get("com.wienvied.alpha")),
                 None,
             )
             source_manifest = next((
                 x["src"] for x in data["sources"]
-                if x.get("key_systems").get("com.widevine.alpha")),
+                if x.get("key_systems").get("com.wienvied.alpha")),
                 None,
             )
 
