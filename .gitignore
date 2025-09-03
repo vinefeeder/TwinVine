@@ -6,6 +6,7 @@ packages/envied/src/envied/envied.yaml
 images/*
 tools/
 batch.txt
+*.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
