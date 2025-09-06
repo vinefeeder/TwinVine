@@ -67,7 +67,7 @@ def main(version: bool, debug: bool, log_path: Path) -> None:
                 style="ascii.art",
             ),
             Text("    and more than unshackled...", style = "ascii.art"),
-            f"\nv [repr.number]{__version__}[/] - https://github.com/videfeeder/envied",
+            f"\nv [repr.number]{__version__}[/] - https://github.com/vinefeeder/envied",
         ),
         (1, 11, 1, 10),
         expand=True,
