@@ -35,11 +35,11 @@ def pretty_print():
         f"|___/_/_//_/\\__/__/  \\__/\\__/\\_,_/\\__/_/     [/]" + "\n\n"
         f"[{catppuccin_mocha['gray']}]TwinVine version {__version__}[/]\n"
         f"[{catppuccin_mocha['text2']}]© 2024-25  A_n_g_e_l_a[/]\n\n"
-        f"[{catppuccin_mocha['pink']}]driving ...[/]\n\n"
-        f"[{catppuccin_mocha['text2']}]░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
-        f"[{catppuccin_mocha['text2']}]░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
-        f"[{catppuccin_mocha['text2']}]░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n\n"
-        f"[{catppuccin_mocha['gray']}]© 2019-2025 rlaphoenix [/]" + "\n"
+        f"[{catppuccin_mocha['pink']}]driving...[/]\n\n"
+        f"[{catppuccin_mocha['pink']}]░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
+        f"[{catppuccin_mocha['pink']}]░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
+        f"[{catppuccin_mocha['pink']}]░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n\n"
+        f"[{catppuccin_mocha['pink']}]It's more than unshackled...[/]" + "\n"
 
  
 
@@ -48,8 +48,8 @@ def pretty_print():
 
     # 
     instructions = (
-        f"[{catppuccin_mocha['pink']}]uv run vinefeeder --help for options[/]\n"
-        f"[{catppuccin_mocha['pink']}]uv run envied -? for options.[/]")
+        f"[{catppuccin_mocha['text2']}]uv run vinefeeder --help for options[/]\n"
+        f"[{catppuccin_mocha['text2']}]uv run envied -? for options.[/]")
 
     # Display the panel
     panel = Panel(
