@@ -47,14 +47,14 @@ cdm:
 
 # Use pywidevine Serve-compliant Remote CDMs
 # Currently not working!
-remote_cdm:
-    - name: "CDRM_Project_API"
-      device_type: ANDROID
-      system_id: 22590
-      security_level: 3
-      host: "https://cdrm-project.com/remotecdm/widevine"
-      secret: "CDRM"
-      device_name: "public"
+#remote_cdm:
+#    - name: "CDRM_Project_API"
+#      device_type: ANDROID
+#      system_id: 22590
+#      security_level: 3
+#      host: "https://cdrm-project.com/remotecdm/widevine"
+#      secret: "CDRM"
+#      device_name: "public"
 
 
 # Key Vaults store your obtained Content Encryption Keys (CEKs)

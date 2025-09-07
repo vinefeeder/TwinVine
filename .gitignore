@@ -1,6 +1,7 @@
 Cache/
 Logs/
 Downloads
+Temp/
 packages/envied/src/envied/logs/
 packages/envied/src/envied/envied.yaml
 images/*
