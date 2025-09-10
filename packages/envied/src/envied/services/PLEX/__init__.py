@@ -12,23 +12,14 @@ from concurrent.futures import ThreadPoolExecutor
 import click
 from click import Context
 
-try:
-    from devine.core.credential import Credential  # type: ignore
-    from devine.core.manifests import DASH, HLS  # type: ignore
-    from devine.core.search_result import SearchResult  # type: ignore
-    from devine.core.service import Service  # type: ignore
-    from devine.core.titles import Episode, Movie, Movies, Series  # type: ignore
-    from devine.core.tracks import Chapter, Chapters, Tracks  # type: ignore
-except ImportError:
-    try:
-        from unshackle.core.credential import Credential
-        from unshackle.core.manifests import DASH, HLS
-        from unshackle.core.search_result import SearchResult
-        from unshackle.core.service import Service
-        from unshackle.core.titles import Episode, Movie, Movies, Series
-        from unshackle.core.tracks import Chapter, Chapters, Tracks
-    except ImportError:
-        raise ImportError("PLEX service requires devine or unshackle to be installed")
+
+from envied.core.credential import Credential
+from envied.core.manifests import DASH, HLS
+from envied.core.search_result import SearchResult
+from envied.core.service import Service
+from envied.core.titles import Episode, Movie, Movies, Series
+from envied.core.tracks import Chapter, Chapters, Tracks
+ 
 
 from requests import Request
 

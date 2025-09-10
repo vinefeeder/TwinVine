@@ -10,21 +10,13 @@ from urllib.parse import quote, urljoin
 import click
 from click import Context
 
-try:
-    from devine.core.manifests import DASH  # type: ignore
-    from devine.core.search_result import SearchResult  # type: ignore
-    from devine.core.service import Service  # type: ignore
-    from devine.core.titles import Episode, Movie, Movies, Series  # type: ignore
-    from devine.core.tracks import Chapter, Chapters, Tracks  # type: ignore
-except ImportError:
-    try:
-        from unshackle.core.manifests import DASH
-        from unshackle.core.search_result import SearchResult
-        from unshackle.core.service import Service
-        from unshackle.core.titles import Episode, Movie, Movies, Series
-        from unshackle.core.tracks import Chapter, Chapters, Tracks
-    except ImportError:
-        raise ImportError("CWTV service requires devine or unshackle to be installed")
+
+from envied.core.manifests import DASH
+from envied.core.search_result import SearchResult
+from envied.core.service import Service
+from envied.core.titles import Episode, Movie, Movies, Series
+from envied.core.tracks import Chapter, Chapters, Tracks
+
 
 from lxml import etree
 from requests import Request
