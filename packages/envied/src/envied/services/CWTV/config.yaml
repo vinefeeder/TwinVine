@@ -1,0 +1,9 @@
+headers:
+  User-Agent: Mozilla/5.0 (Linux; Android 11; Smart TV Build/AR2101; wv)
+
+endpoints:
+  base_url: https://images.cwtv.com
+  playback: https://edge.api.brightcove.com/playback/v1/accounts/6415823816001/videos/{}
+
+policy_key: BCpkADawqM0t2qFXB_K2XdHv2JmeRgQjpP6De9_Fl7d4akhL5aeqYwErorzsAxa7dyOF2FdxuG5wWVOREHEwb0DI-M8CGBBDpqwvDBEPfDKQg7kYGnccdNDErkvEh2O28CrGR3sEG6MZBlZ03I0xH7EflYKooIhfwvNWWw
+  
