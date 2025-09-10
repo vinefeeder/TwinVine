@@ -1272,7 +1272,7 @@ class dl:
 
         if isinstance(drm, Widevine):
             with self.DRM_TABLE_LOCK:
-                cek_tree = Tree(Text.assemble(("Widevine\n", "cyan"), (f"({drm.pssh.dumps()})", "text"), overflow=config.pssh_display))
+                cek_tree = Tree(Text.assemble(("Widevine\n", "cyan"), (f"({drm.pssh.dumps()})", "text"), overflow=config.pssh_display or "fold"))
                 pre_existing_tree = next(
                     (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
                 )
@@ -1368,7 +1368,7 @@ class dl:
                     Text.assemble(
                         ("PlayReady", "cyan"),
                         (f"({drm.pssh_b64 or ''})", "text"),
-                        overflow="fold",
+                        overflow = config.pssh_display or "fold",
                     )
                 )
                 pre_existing_tree = next(

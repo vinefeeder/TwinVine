@@ -19,6 +19,13 @@ The prime reason for the existence of envied is a --select-titles function.
 If you already use envied you'll probably just want to replace envied/envied/envied.yaml
 with your own. But the exisiting yaml is close to working - just needs a few directory locations.
 
+## Divergence from Envied's Parent
+- **select-titles option**  avoid the uncertainty of -w S26E03 gobbledegook to get your video
+- **Singleton Design Pattern** Good coding practice: where possible, a single instance of a Class is created and re-used. Saving time and resources.
+- **Multitron Design Pattern** For those times when a Singleton will not do. Re-use Classes with care for the calling parameters. 
+- **Clear Branding**  Clear presentation of the program name!
+- **No Free Ride for Spammers**  Envied will not implement any methods used to connect to Decrypt Labs or other payfor-CDM-access sites
+
 
  **Recommended:** Use `uv run envied` instead of direct command execution to ensure proper virtual environment activation.
 
