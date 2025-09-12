@@ -171,7 +171,7 @@ class PLEX(Service):
         return tracks
 
     def get_chapters(self, title: Movie | Episode) -> Chapters:
-        if not (markers := title.data.get("Marker", [])):
+        '''if not (markers := title.data.get("Marker", [])):
             try:
                 metadata = self._request(
                 "POST", "/playQueues",
@@ -194,7 +194,8 @@ class PLEX(Service):
             if cue.get("startTimeOffset", 0) > 0:
                 chapters.append(Chapter(name=cue.get("type", "").title(), timestamp=cue.get("startTimeOffset")))
 
-        return Chapters(chapters)
+        return Chapters(chapters)'''
+        return []
     
     def get_widevine_service_certificate(self, **_: Any) -> str:
         return None
