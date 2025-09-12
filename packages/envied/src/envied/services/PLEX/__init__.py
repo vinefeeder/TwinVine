@@ -13,12 +13,12 @@ import click
 from click import Context
 
 
-from envied.core.credential import Credential
-from envied.core.manifests import DASH, HLS
-from envied.core.search_result import SearchResult
-from envied.core.service import Service
-from envied.core.titles import Episode, Movie, Movies, Series
-from envied.core.tracks import Chapter, Chapters, Tracks
+from unshackle.core.credential import Credential
+from unshackle.core.manifests import DASH, HLS
+from unshackle.core.search_result import SearchResult
+from unshackle.core.service import Service
+from unshackle.core.titles import Episode, Movie, Movies, Series
+from unshackle.core.tracks import Chapter, Chapters, Tracks
  
 
 from requests import Request
@@ -108,6 +108,10 @@ class PLEX(Service):
                 )
 
     def get_titles(self) -> Movies | Series:
+        # check lang code and remove if exists
+        pattern = re.compile(r'^(https?://[^/]+)(?:/[a-z]{2}-[A-Z]{2})?(.*)$')
+        self.title =  pattern.sub(r'\1\2', self.title)
+        
         url_pattern = re.compile(
             r"^https://watch.plex.tv/"
             r"(?P<type>movie|show)/"
