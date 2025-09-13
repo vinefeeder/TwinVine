@@ -420,6 +420,7 @@ class VineFeeder(QWidget):
 
         fqname = meta["module"]
         cls_name = meta["loader_class"]
+        console.print(f"[{catppuccin_mocha['pink']}]Service selected: {service_name}[/]")
 
         try:
             module = importlib.import_module(fqname)

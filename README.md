@@ -41,7 +41,7 @@ Then install TwinVine; the following installs the latest version directly from t
 git clone https://github.com/vinefeeder/TwinVine.git
 cd TwinVine
 uv clean
-uv.lock
+uv lock
 uv sync
 uv run vinefeeder --help or
 uv run envied --help
@@ -71,7 +71,7 @@ Envied has
 
 ALL4  AUBC  CBS  DSCP  iP   MAX   MY5   NF   PCOK   ROKU  SPOT  TPTV  TVNZ  YTBE
 ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
-Not all have been tested  
+These services have web-origins and not all have been tested by me.  
   
 **Other README's""
     TwinVine/packages/vinefeeder/src/vinefeeder/README.md  
