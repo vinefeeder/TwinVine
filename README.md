@@ -21,6 +21,8 @@ TwinVine is the easy way to handle your download tasks.
 uv run envied dl (options) (service) (program url)
 
 uv run vinefeeder  - to open the interactive GUI for search, browse, etc.
+
+To go to the command line use of 'envied' after using the GUI: close the GUI directly, or ctrl+c in terminal.
 ```
 **Installation**
 
