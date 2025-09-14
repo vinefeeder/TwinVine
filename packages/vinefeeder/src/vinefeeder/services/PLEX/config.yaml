@@ -1,0 +1,18 @@
+service_name: PLEX
+
+options: -l en
+
+media_dict:
+  action: https://watch.plex.tv/on-demand/category/action
+  animation: https://watch.plex.tv/on-demand/category/animation
+  comedy: https://watch.plex.tv/on-demand/category/comedy
+  crime: https://watch.plex.tv/on-demand/category/crime
+  documantary: https://watch.plex.tv/on-demand/category/documentary
+  drama: https://watch.plex.tv/on-demand/category/drama
+  en epsaniol: https://watch.plex.tv/on-demand/category/en-espanol
+  horror: https://watch.plex.tv/on-demand/category/horror
+  music: https://watch.plex.tv/on-demand/category/music
+  romance: https://watch.plex.tv/on-demand/category/romance
+  sci-fi: https://watch.plex.tv/on-demand/category/sci-fi
+  thriller: https://watch.plex.tv/on-demand/category/thriller
+  western: https://watch.plex.tv/on-demand/category/western

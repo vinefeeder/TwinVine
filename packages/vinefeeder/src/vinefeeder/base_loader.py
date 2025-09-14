@@ -10,6 +10,10 @@ from .pretty import create_clean_panel
 from .pretty import catppuccin_mocha
 import subprocess
 from .config_loader import load_config_with_fallback, get_bool
+import xmltodict
+import json
+import httpx
+import uuid
 
 console = Console()
 
@@ -70,6 +74,21 @@ class BaseLoader:
         if response.status_code != 200:
             raise Exception(f"Request failed with status {response.status_code}")
         return response.text
+    
+    def get_json_from_xml_data(self, url, headers=None, params=None):
+        """Fetch data from a given URL."""
+
+        if not headers:
+            headers = self.headers
+        response = self.client.get(
+            url, headers=headers, params=params, follow_redirects=True
+        )
+    
+        if response.status_code != 200:
+            raise Exception(f"Request failed with status {response.status_code}")
+        mydict = xmltodict.parse(response.content)
+        return json.dumps(mydict)
+
 
     def get_options(self, url, headers=None):
         if not headers:
@@ -92,6 +111,40 @@ class BaseLoader:
     def parse_data(self, html):
         """Parse HTML data into JSON format."""
         return parse_json(html)
+    
+    def fetch_and_parse(self, url: str, headers):
+        # deals with response.text as xml
+        # first apporach - request json
+        # second approach convert xml to json
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(url, headers=headers)
+            resp.raise_for_status()
+
+            ctype = resp.headers.get("Content-Type", "").lower()
+
+            # Try JSON if the server honored the Accept header
+            if "application/json" in ctype:
+                return resp.json()
+
+            # Fallback: if service still replied with XML (or text), parse it
+            text = resp.text.strip()
+            if text.startswith("<"):
+                # Keep XML attributes and text nodes intact
+                data = xmltodict.parse(
+                    text,
+                    attr_prefix="@",
+                    cdata_key="#text"
+                )
+                return data
+
+            # Last resort: try JSON parse (in case of wrong/missing content-type)
+            try:
+                return resp.json()
+            except json.JSONDecodeError as e:
+                raise RuntimeError(
+                    f"Unexpected response (Content-Type={ctype[:50]}): cannot parse as JSON or XML"
+                ) from e
+
 
     def normalize_episode(self, episode):
         """
@@ -269,8 +322,8 @@ class BaseLoader:
         try:
             self.episode_series_numbers = self.get_episodes_series_numbers(series_name)
 
-        except Exception:
-            console.print(f"[{catppuccin_mocha['text2']}]No data found")
+        except Exception as e:
+            console.print(f"[{catppuccin_mocha['text2']}]No data found: {e}")
             self.clean_terminal()
             sys.exit(0)
 
