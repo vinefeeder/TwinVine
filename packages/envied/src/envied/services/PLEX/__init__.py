@@ -28,7 +28,15 @@ except ImportError:
         from unshackle.core.titles import Episode, Movie, Movies, Series
         from unshackle.core.tracks import Chapter, Chapters, Tracks
     except ImportError:
-        raise ImportError("PLEX service requires devine or unshackle to be installed")
+        try:
+            from envied.core.credential import Credential
+            from envied.core.manifests import DASH, HLS
+            from envied.core.search_result import SearchResult
+            from envied.core.service import Service
+            from envied.core.titles import Episode, Movie, Movies, Series
+            from envied.core.tracks import Chapter, Chapters, Tracks
+        except ImportError:
+            raise ImportError("PLEX service requires devine or unshackle to be installed")
 
 from requests import Request
 
