@@ -208,7 +208,7 @@ class PlexLoader(BaseLoader):
                     return int(m.group()) if m else default
 
                 seasons = sorted({p.strip().lower() for p in parts}, key=season_num)
-                self.clear_series_data()  #  safely remove any leftovers
+                self.clear_series_data()  #  safely remove any leftovers ready for building 
                 for item in seasons:
                     url = f"https://watch.plex.tv/show/{selected.lower().replace(' ','-')}/season/{item.split(' ')[1]}"            
                     html_bytes = self.get_data(url=url, headers=headers)
@@ -231,7 +231,7 @@ class PlexLoader(BaseLoader):
                             "synopsis": rinse(synopsis) or None,
                         }
                         self.add_episode(selected, episode)
-                        #print(selected, episode)
+                    
                 
             except Exception as e:
                 print(f"No valid data at {url} found.\n Exiting  {e}")

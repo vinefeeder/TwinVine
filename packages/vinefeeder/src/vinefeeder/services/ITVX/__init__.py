@@ -73,7 +73,6 @@ class ItvxLoader(BaseLoader):
         # ALTERNATIVES BELOW FROM POP-UP MENU
         elif inx == 0:
             # from greedy-search OR selecting Browse-category
-            # example: https://www.channel4.com/programmes/the-great-british-bake-off/on-demand/75228-001
 
             # need a search keyword(s) from url
             # split and select series name

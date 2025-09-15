@@ -12,14 +12,23 @@ from concurrent.futures import ThreadPoolExecutor
 import click
 from click import Context
 
-
-from envied.core.credential import Credential
-from envied.core.manifests import DASH, HLS
-from envied.core.search_result import SearchResult
-from envied.core.service import Service
-from envied.core.titles import Episode, Movie, Movies, Series
-from envied.core.tracks import Chapter, Chapters, Tracks
- 
+try:
+    from devine.core.credential import Credential  # type: ignore
+    from devine.core.manifests import DASH, HLS  # type: ignore
+    from devine.core.search_result import SearchResult  # type: ignore
+    from devine.core.service import Service  # type: ignore
+    from devine.core.titles import Episode, Movie, Movies, Series  # type: ignore
+    from devine.core.tracks import Chapter, Chapters, Tracks  # type: ignore
+except ImportError:
+    try:
+        from unshackle.core.credential import Credential
+        from unshackle.core.manifests import DASH, HLS
+        from unshackle.core.search_result import SearchResult
+        from unshackle.core.service import Service
+        from unshackle.core.titles import Episode, Movie, Movies, Series
+        from unshackle.core.tracks import Chapter, Chapters, Tracks
+    except ImportError:
+        raise ImportError("PLEX service requires devine or unshackle to be installed")
 
 from requests import Request
 
@@ -30,7 +39,7 @@ class PLEX(Service):
     Service code for Plex's free streaming service (https://watch.plex.tv/).
 
     \b
-    Version: 1.0.0
+    Version: 1.0.3
     Author: stabbedbybrick
     Authorization: None
     Geofence: API and downloads are locked into whatever region the user is in
@@ -108,12 +117,9 @@ class PLEX(Service):
                 )
 
     def get_titles(self) -> Movies | Series:
-        # check lang code and remove if exists
-        pattern = re.compile(r'^(https?://[^/]+)(?:/[a-z]{2}-[A-Z]{2})?(.*)$')
-        self.title =  pattern.sub(r'\1\2', self.title)
-        
         url_pattern = re.compile(
             r"^https://watch.plex.tv/"
+            r"(?:[a-z]{2}(?:-[A-Z]{2})?/)??"
             r"(?P<type>movie|show)/"
             r"(?P<id>[\w-]+)"
             r"(?P<url_path>(/season/\d+/episode/\d+))?"
@@ -123,11 +129,13 @@ class PLEX(Service):
         if not match:
             raise ValueError(f"Could not parse ID from title: {self.title}")
 
-        kind, guid, path = (match.group(i) for i in ("type", "id", "url_path"))
+        kind, guid, url_path = (match.group(i) for i in ("type", "id", "url_path"))
 
         if kind == "show":
-            if path is not None:
-                episode = self._episode(urlparse(self.title).path)
+            if url_path is not None:
+                path = urlparse(self.title).path
+                url = re.sub(r"/[a-z]{2}(?:-[A-Z]{2})?/", "/", path)
+                episode = self._episode(url)
                 return Series(episode)
             
             episodes = self._series(guid)
@@ -175,7 +183,7 @@ class PLEX(Service):
         return tracks
 
     def get_chapters(self, title: Movie | Episode) -> Chapters:
-        '''if not (markers := title.data.get("Marker", [])):
+        if not (markers := title.data.get("Marker")):
             try:
                 metadata = self._request(
                 "POST", "/playQueues",
@@ -191,15 +199,17 @@ class PLEX(Service):
 
             except Exception as e:
                 self.log.debug("Failed to fetch markers: %s", e)
-                pass
+                return Chapters()
+        
+        if not markers:
+            return Chapters()
 
         chapters = []
         for cue in markers:
             if cue.get("startTimeOffset", 0) > 0:
                 chapters.append(Chapter(name=cue.get("type", "").title(), timestamp=cue.get("startTimeOffset")))
 
-        return Chapters(chapters)'''
-        return []
+        return Chapters(chapters)
     
     def get_widevine_service_certificate(self, **_: Any) -> str:
         return None
