@@ -7,6 +7,7 @@ import re
 import uuid
 
 import json
+import subprocess
 
 
 console = Console()
@@ -19,8 +20,8 @@ class PlexLoader(BaseLoader):
         headers = {
             "Accept": "*/*",
             "user-agent": "Dalvik/2.9.8 (Linux; U; Android 9.9.2; ALE-L94 Build/NJHGGF)",
-            "Origin": "https://www.itv.com",
-            "Referer": "https://www.itv.com/",
+            "Origin": "https://plex.tv",
+            "Referer": "https://plex.tv/",
         }
         super().__init__(headers)
 
@@ -264,3 +265,91 @@ class PlexLoader(BaseLoader):
                 )
 
         return None
+
+    def fetch_videos_by_category(self, browse_url):
+        """
+        Fetches videos from a category Plex
+        Args:
+            browse_url (str): URL of the category page.
+        Returns:
+            None
+        """
+        category = browse_url.split('/')[-1]
+        browse_url = f"https://luma.plex.tv/api/screen/on-demand/category/{category}"
+        beaupylist = []  # hold beaupy data for display and programme selection
+        headers = {
+            "Accept": "application/json",
+            "X-Plex-Product": "Plex Mediaverse",
+            "X-Plex-Version": "1.0",
+            "X-Plex-Client-Identifier": str(uuid.uuid4()),
+        }
+        try:
+            myjson = self.parse_data(self.get_data(browse_url))
+            res = jmespath.search(
+            """
+            ui.list.content[].{
+                label: label,
+                link: link.url,
+                duration: link.previewData.facts[1].accessibilityLabel,
+                pay: link.external
+            }
+            """,
+            myjson,
+            )
+       
+            for item in res:
+                title = item["label"]
+                duration= item["duration"] 
+                url = f"https://watch.plex.tv{item.get("link")}"
+
+                episode = {
+                    "title": title,
+                    "url": url,
+                    "synopsis": duration,
+                }
+                self.add_episode(title, episode)
+
+
+            # Build the beaupylist for display
+            for i, item in enumerate(res):
+                title = (item["label"].replace("-", " ")).title()
+                url = f"https://watch.plex.tv{item["link"]}"
+                synopsis = item["duration"]
+                beaupylist.append(
+                    f"{i} {title.replace('_',' ')}\n\t{synopsis}"
+                )  # \t used to split text later
+
+        except Exception as e:
+            print(f"Error fetching category data: {e}")
+            return
+
+        # super
+        found = self.display_beaupylist(beaupylist)
+
+        if found:
+            ind = found.split(" ")[0]
+            url = f"https://watch.plex.tv{res[int(ind)]["link"]}"
+            # url may be for series or single Film
+            url = url.encode("utf-8", "ignore").decode().strip()  # has spaces!
+            # process short-cut download or do greedy search on url
+            if 'movie' in url:
+                self.options_list = split_options(self.options)
+                try:
+                    if self.options_list[0] == "":
+                        command = ['uv', 'run', 'envied', "dl", "PLEX", url]
+                    else:
+                        command = ['uv', 'run', 'envied', "dl", *self.options_list, "PLEX", url]
+                    self.runsubprocess(command)
+                except Exception as e:
+                    print(
+                        "Error downloading video:",
+                        e,
+                        "Is the package for vinefeeder/envied installed correctly ?",
+                    )
+                return
+            category = "show"
+            return self.process_received_url_from_category(url, category=category)
+
+        else:
+            print("No video selected.")
+            return

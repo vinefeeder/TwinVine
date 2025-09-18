@@ -36,7 +36,7 @@ except ImportError:
             from envied.core.titles import Episode, Movie, Movies, Series
             from envied.core.tracks import Chapter, Chapters, Tracks
         except ImportError:
-            raise ImportError("PLEX service requires devine or unshackle to be installed")
+            raise ImportError("PLEX service requires devine, envied or unshackle to be installed")
 
 from requests import Request
 

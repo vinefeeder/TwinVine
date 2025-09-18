@@ -15,6 +15,7 @@ import json
 import httpx
 import uuid
 
+
 console = Console()
 
 
@@ -442,6 +443,13 @@ class BaseLoader:
             # direct download
             self.receive(1, url)
             return
+        if category.lower() in [
+            "show",
+        ]:
+            search = url.split('show/')[1]
+            search = search.split('/')[0].split('?')[0].replace('-', ' ').replace('.','')  # tricky fullstop
+         
+            self.receive(3, search)
 
         if "https" not in url:  # browse entry
             self.receive(3, url)
