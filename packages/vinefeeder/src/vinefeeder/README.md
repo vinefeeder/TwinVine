@@ -144,7 +144,7 @@ Services are displayed in alphabetical order for easy access. From there, you ca
     
 **Services**
 
-Currently seven services are working  - All4, BBC, ITVX, My5 STV, U and TPTV , all UK services plus TVNZ. 
+Currently ten services are working  - All4, BBC, ITVX, My5 STV, U and TPTV , all UK services plus RTE and TVNZ. 
 Other services: awaiting contributors!!
 
 **Text Entry Box**
