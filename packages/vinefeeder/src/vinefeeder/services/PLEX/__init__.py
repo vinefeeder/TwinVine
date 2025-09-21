@@ -3,14 +3,9 @@ from vinefeeder.base_loader import BaseLoader
 from vinefeeder.parsing_utils import rinse, split_options, extract_script_with_id_json
 from rich.console import Console
 import jmespath
-import re
 import uuid
 
-import json
-import subprocess
-
-
-console = Console()
+#console = Console()
 
 
 class PlexLoader(BaseLoader):
