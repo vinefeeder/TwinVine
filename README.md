@@ -67,11 +67,11 @@ The top level vinefeeder config file at  TwinVine/packages/vinefeeder/src/vinefe
 
 Vinefeeder currently has 8 services for which search, browse and list-select are available  
   
-  ALL4  BBC  ITVX  MY5 PLEX STV  TPTV  TVNZ  U 
+  ALL4  BBC  ITVX  MY5 PLEX RTE STV  TPTV  TVNZ  U 
   
 Envied has   
 
-ALL4  AUBC  CBS  DSCP  iP   MAX   MY5   NF   PCOK PLEX  ROKU  SPOT  TPTV  TVNZ  YTBE
+ALL4  AUBC  CBS CWTV DSCP  iP   MAX   MY5   NF   PCOK PLEX RTE  ROKU  SPOT  TPTV  TVNZ  YTBE
 ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
 These services have web-origins and not all have been tested by me.  
   

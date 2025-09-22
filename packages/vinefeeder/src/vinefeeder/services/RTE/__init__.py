@@ -5,6 +5,8 @@ from unidecode import unidecode
 import re
 import json
 from httpx import Client
+import unicodedata
+from urllib.parse import unquote
 
 client = Client()
 
@@ -51,8 +53,11 @@ class RteLoader(BaseLoader):
         if opts:
             RteLoader.options = opts
         self.options_list = split_options(RteLoader.options)
+        #  RTE with aodd accented chars
+        search_term = normalize_url(search_term)
         # direct download
         if "http" in search_term and inx == 1:
+            
             self.options_list = split_options(self.options)
             try:
                 if self.options_list[0] == "":
@@ -142,7 +147,7 @@ class RteLoader(BaseLoader):
     def second_fetch(self, selected):
         
         episode = self.get_series(selected)
-        url = episode[0]['url']
+        url = normalize_url(episode[0]['url'])
         guid = url.split('/')[-1]
         type = episode[0]['type']
         if not type == 'series':
@@ -226,3 +231,12 @@ class RteLoader(BaseLoader):
     def fetch_videos_by_category(self, browse_url):
 
         print("Search by category is not implemented for this service.")
+
+def normalize_url(url_string):
+    # remove accented and url quoted chats from string
+    url = url_string
+    decoded_url = unquote(url)
+    # Normalize and remove non-ASCII characters
+    normalized_url = unicodedata.normalize('NFKD', decoded_url).encode('ASCII', 'ignore').decode()
+
+    return(normalized_url)

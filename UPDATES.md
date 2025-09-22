@@ -6,3 +6,8 @@
 
 **18 Sept 2025:**
  - Fully implemented Plex service - categories now selectable.
+ 
+**22 Sept 2025:**
+  - Added RTE service with search and direct url entry. 
+  - updated README
+ 
