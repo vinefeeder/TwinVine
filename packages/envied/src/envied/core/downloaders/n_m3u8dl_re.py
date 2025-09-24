@@ -150,6 +150,7 @@ def download(
 
     track_type = track.__class__.__name__
     thread_count = str(config.n_m3u8dl_re.get("thread_count", max_workers))
+    retry_count = str(config.n_m3u8dl_re.get("retry_count", max_workers))
     ad_keyword = config.n_m3u8dl_re.get("ad_keyword")
 
     arguments = [
@@ -160,6 +161,8 @@ def download(
         output_dir,
         "--thread-count",
         thread_count,
+        "--download-retry-count",
+        retry_count,
         "--no-log",
         "--write-meta-json",
         "false",

@@ -65,7 +65,7 @@ The top level vinefeeder config file at  TwinVine/packages/vinefeeder/src/vinefe
 
 **Services**
 
-Vinefeeder currently has 8 services for which search, browse and list-select are available  
+Vinefeeder currently has 10 services for which search, browse and list-select are available  
   
   ALL4  BBC  ITVX  MY5 PLEX RTE STV  TPTV  TVNZ  U 
   
