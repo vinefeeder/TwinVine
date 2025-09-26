@@ -1476,6 +1476,8 @@ class dl:
 
     @staticmethod
     def save_cookies(path: Path, cookies: CookieJar):
+        if hasattr(cookies, 'jar'):
+            cookies = cookies.jar
         cookie_jar = MozillaCookieJar(path)
         cookie_jar.load()
         for cookie in cookies:

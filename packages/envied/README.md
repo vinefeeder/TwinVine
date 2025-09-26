@@ -8,16 +8,18 @@
 ## What is envied?
 
 Envied is a fork of [Devine](https://github.com/devine-dl/devine/). The name 'envied' is an anagram of Devine, and as such, pays homage to the original author. 
-Is is based on v 1.4.3 of envied. It is a powerful archival tool for downloading movies, TV shows, and music from streaming services. Built with a focus on modularity and extensibility, it provides a robust framework for content acquisition with support for DRM-protected content.
+Is is based on v 1.4.7 of unshackle. It is a powerful archival tool for downloading movies, TV shows, and music from streaming services. Built with a focus on modularity and extensibility, it provides a robust framework for content acquisition with support for DRM-protected content.
 
 No commands have been changed 'uv run envied' still works as usual. 
 
 The major difference is that envied comes complete and needs little configuration.
-CDM and services are taken care of.
+A basic CDM and services are taken care of.
 The prime reason for the existence of envied is a --select-titles function.
 
 If you already use envied you'll probably just want to replace envied/envied/envied.yaml
 with your own. But the exisiting yaml is close to working - just needs a few directory locations.
+
+Envied's existence helps keep download tools free. Unshackle is flirting with pay-for access, having a free, closley matched, aternative puts a break on any pay-me aspirations unshackle might have now or in the future.
 
 ## Divergence from Envied's Parent
 - **select-titles option**  avoid the uncertainty of -w S26E03 gobbledegook to get your video

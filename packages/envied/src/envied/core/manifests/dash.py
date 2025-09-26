@@ -15,6 +15,7 @@ from uuid import UUID
 from zlib import crc32
 
 import requests
+from curl_cffi.requests import Session as CurlSession
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element, ElementTree
 from pyplayready.system.pssh import PSSH as PR_PSSH
@@ -47,7 +48,7 @@ class DASH:
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Session] = None, **args: Any) -> DASH:
+    def from_url(cls, url: str, session: Optional[Union[Session, CurlSession]] = None, **args: Any) -> DASH:
         if not url:
             raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
@@ -55,8 +56,8 @@ class DASH:
 
         if not session:
             session = Session()
-        elif not isinstance(session, Session):
-            raise TypeError(f"Expected session to be a {Session}, not {session!r}")
+        elif not isinstance(session, (Session, CurlSession)):
+            raise TypeError(f"Expected session to be a {Session} or {CurlSession}, not {session!r}")
 
         res = session.get(url, **args)
         if res.url != url:
@@ -102,6 +103,10 @@ class DASH:
             if callable(period_filter) and period_filter(period):
                 continue
             if next(iter(period.xpath("SegmentType/@value")), "content") != "content":
+                continue
+            if "urn:amazon:primevideo:cachingBreadth" in [
+                x.get("schemeIdUri") for x in period.findall("SupplementalProperty")
+            ]:
                 continue
 
             for adaptation_set in period.findall("AdaptationSet"):
