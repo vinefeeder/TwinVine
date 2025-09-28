@@ -19,7 +19,7 @@ from pathlib import Path
 import os
 import shlex
 
-WVD_PATH = "./device.wvd"
+WVD_PATH = "./WVDs/device.wvd"
 WIDEVINE_SYSTEM_ID = 'EDEF8BA9-79D6-4ACE-A3C8-27DCD51D21ED'
 
 class DownloadThread(QThread):
