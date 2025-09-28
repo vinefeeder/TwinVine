@@ -472,6 +472,81 @@ class VineFeeder(QWidget):
             )  # Bind to threaded service loading
             self.highlighted_layout.addWidget(button)
             #
+        # add HellYes 
+        button = QPushButton("HellYes")
+        button.clicked.connect(
+            lambda: self.run_script("./gui.py"))
+        self.highlighted_layout.addWidget(button)
+
+
+    def run_script(self, path: str):
+        """
+        Rules:
+        - .py/.pyw: run with the current interpreter (sys.executable), prefer pythonw on Windows for .pyw
+        - macOS .app bundles: open via `open` (non-blocking)
+        - Executables (chmod +x, not .py/.pyw): run directly
+        - Anything else: last-ditch "open" (Windows: startfile, mac: open, Linux: xdg-open)
+        """
+        try:
+            abs_path = os.path.abspath(path)
+            if not os.path.exists(abs_path):
+                print(f"[error] File not found: {abs_path}")
+                return
+
+            _, ext = os.path.splitext(abs_path)
+            ext = ext.lower()
+            sys_interp = sys.executable or "python"
+
+            # macOS .app bundle
+            if sys.platform == "darwin" and abs_path.endswith(".app"):
+                subprocess.Popen(["open", abs_path], cwd=os.path.dirname(abs_path))
+                return
+
+            # If it's a Python script, run it with our interpreter
+            if ext in (".py", ".pyw"):
+                interpreter = sys_interp
+                # Prefer pythonw for .pyw on Windows (no extra console window)
+                if os.name == "nt" and ext == ".pyw":
+                    possible = sys_interp.replace("python.exe", "pythonw.exe")
+                    if os.path.exists(possible):
+                        interpreter = possible
+
+                # Launch non-blocking so the Qt UI stays responsive
+                creationflags = 0
+                if os.name == "nt":
+                    # Detach so closing the parent window doesn't kill the child
+                    creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+
+                subprocess.Popen(
+                    [interpreter, abs_path],
+                    cwd=os.path.dirname(abs_path),
+                    creationflags=creationflags
+                )
+                return
+
+            # If it's already executable (non-Python), run it directly
+            is_executable = os.access(abs_path, os.X_OK) and ext not in (".py", ".pyw")
+            if is_executable:
+                subprocess.Popen([abs_path], cwd=os.path.dirname(abs_path))
+                return
+
+            # Fallbacks: just "open" the file with the OS handler
+            if os.name == "nt":
+                os.startfile(abs_path)  # may open in associated app/editor
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", abs_path], cwd=os.path.dirname(abs_path))
+            else:
+                # Linux/Unix
+                opener = shutil.which("xdg-open") or shutil.which("gio")
+                if opener:
+                    subprocess.Popen([opener, abs_path], cwd=os.path.dirname(abs_path))
+                else:
+                    print(f"[warning] No opener found for: {abs_path}")
+
+        except Exception as e:
+            print(f"[error] Failed to launch '{path}': {e}")
+
+
 
     def do_action_select(self, service_name):
         """
