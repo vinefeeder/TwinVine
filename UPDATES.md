@@ -10,4 +10,7 @@
 **22 Sept 2025:**
   - Added RTE service with search and direct url entry. 
   - updated README
+**28 Sept 2025**
+  - added HellYes GUI
+  - added images to reflect GUI change
  
