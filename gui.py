@@ -43,7 +43,7 @@ class AllHell3App(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("allhell3 GUI")
+        self.setWindowTitle("HellYes!")
         layout = QVBoxLayout()
 
         self.mpd_url_label = QLabel("MPD URL")
