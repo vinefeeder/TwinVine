@@ -195,7 +195,7 @@ class dl:
     @click.option(
         "--sub-format",
         type=SubtitleCodecChoice(Subtitle.Codec),
-        default="srt",
+        default=None,
         help="Set Output Subtitle Format, only converting if necessary.",
     )
     @click.option("-V", "--video-only", is_flag=True, default=False, help="Only download video tracks.")
@@ -1542,11 +1542,15 @@ class dl:
                 # All DecryptLabs CDMs use DecryptLabsRemoteCDM
                 return None
             else:
-                del cdm_api["name"]
-                if "type" in cdm_api:
-                    del cdm_api["type"]
-                return RemoteCdm(**cdm_api)
-
+                return RemoteCdm(
+                    device_type=cdm_api['Device Type'],
+                    system_id=cdm_api['System ID'],
+                    security_level=cdm_api['Security Level'],
+                    host=cdm_api['Host'],
+                    secret=cdm_api['Secret'],
+                    device_name=cdm_api['Device Name'],
+                )
+                
         prd_path = config.directories.prds / f"{cdm_name}.prd"
         if not prd_path.is_file():
             prd_path = config.directories.wvds / f"{cdm_name}.prd"

@@ -10,7 +10,7 @@ from appdirs import AppDirs
 class Config:
     class _Directories:
         # default directories, do not modify here, set via config
-        app_dirs = AppDirs("unshackle", False)
+        app_dirs = AppDirs("./", False)
         core_dir = Path(__file__).resolve().parent
         namespace_dir = core_dir.parent
         commands = namespace_dir / "commands"
