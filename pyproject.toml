@@ -13,3 +13,7 @@ dev = [
     "mypy",
     "scrapy>=2.13.3",
 ]
+
+[tool.uv]
+constraint-dependencies = ["lxml>=6.0.2"]
+

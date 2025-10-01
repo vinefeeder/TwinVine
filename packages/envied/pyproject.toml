@@ -4,9 +4,9 @@ build-backend = "uv_build"
 
 [project]
 name = "envied"
-version = "1.4.2"
+version = "1.4.7"
 description = "Modular Movie, TV, and Music Archival Software."
-authors = [{ name = "envied team" }]
+authors = [{ name = "rlaphoenix and others" }]
 requires-python = ">=3.11,<3.15"
 readme = "README.md"
 license = "GPL-3.0-only"
@@ -33,7 +33,7 @@ dependencies = [
     "crccheck>=1.3.0,<2",
     "jsonpickle>=3.0.4,<4",
     "langcodes>=3.4.0,<4",
-    "lxml>=5.2.1,<6",
+    "lxml>=6.0.2",
     "pproxy>=2.7.9,<3",
     "protobuf>=4.25.3,<5",
     "pycaption>=2.2.6,<3",
@@ -54,14 +54,15 @@ dependencies = [
     "urllib3>=2.2.1,<3",
     "chardet>=5.2.0,<6",
     "curl-cffi>=0.7.0b4,<0.8",
-    "pyplayready>=0.6.0,<0.7",
+    "pyplayready>=0.6.3,<0.7",
     "httpx>=0.28.1,<0.29",
     "cryptography>=45.0.0",
-    "subby>=0.3.21",
+    "subby",
     "webvtt-py>=0.5.1",
     "isodate>=0.7.2",
     "beaupy>=3.10.1",
     "scrapy>=2.13.3",
+    "mypy>=1.18.2,<2",
 ]
 
 [project.urls]
@@ -77,7 +78,7 @@ envied = "envied.core.__main__:main"
 [dependency-groups]
 dev = [
     "pre-commit>=3.7.0,<4",
-    "mypy>=1.9.0,<2",
+    "mypy>=1.18.2,<2",
     "mypy-protobuf>=3.6.0,<4",
     "types-protobuf>=4.24.0.20240408,<5",
     "types-PyMySQL>=1.1.0.1,<2",
@@ -109,4 +110,5 @@ ignore_missing_imports = true
 no_implicit_optional = true
 
 [tool.uv.sources]
-subby = { git = "https://github.com/vevv/subby.git" }
+#subby = { git = "https://github.com/vevv/subby.git" }
+subby = { git = "https://github.com/vevv/subby.git", rev = "5a925c367ffb3f5e53fd114ae222d3be1fdff35d" }
