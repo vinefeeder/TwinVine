@@ -109,11 +109,11 @@ class Config:
 
 # noinspection PyProtectedMember
 POSSIBLE_CONFIG_PATHS = (
-    # The unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/unshackle)
+    # The envied Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/envied)
     Config._Directories.namespace_dir / Config._Filenames.root_config,
-    # The Parent Folder to the unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
+    # The Parent Folder to the envied Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
     Config._Directories.namespace_dir.parent / Config._Filenames.root_config,
-    # The AppDirs User Config Folder (e.g., %localappdata%/unshackle)
+    # The AppDirs User Config Folder (e.g., %localappdata%/envied)
     Config._Directories.user_configs / Config._Filenames.root_config,
 )
 

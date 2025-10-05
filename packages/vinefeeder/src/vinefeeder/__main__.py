@@ -21,7 +21,7 @@ import subprocess
 import pkgutil
 from .pretty import catppuccin_mocha
 from .config_loader import load_config_with_fallback, get_bool, project_config_path, save_project_config
-
+import shutil
 PAGE_SIZE = 8  # size of beaupy pagination
 
 
