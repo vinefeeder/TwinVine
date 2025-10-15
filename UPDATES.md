@@ -13,4 +13,8 @@
 **28 Sept 2025**
   - added HellYes GUI
   - added images to reflect GUI change
+
+**15 Oct 2025**
+  - corrected keyword search when using menu in terminal window. Previously that mode of search only took a url striing; now it takes keywords.
+  - code additions to reflect upstream envied changes.
  

@@ -1,6 +1,6 @@
 import atexit
 import logging
-import warnings
+#import warnings
 from pathlib import Path
 
 import click
@@ -8,7 +8,7 @@ import urllib3
 from rich import traceback
 
 # Suppress SyntaxWarning from unmaintained tinycss package (dependency of subby)
-warnings.filterwarnings("ignore", category=SyntaxWarning, module="tinycss")
+#warnings.filterwarnings("ignore", category=SyntaxWarning, module="tinycss")
 
 from rich.console import Group
 from rich.padding import Padding

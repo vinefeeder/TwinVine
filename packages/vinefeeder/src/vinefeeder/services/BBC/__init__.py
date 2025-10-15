@@ -185,12 +185,8 @@ class BbcLoader(BaseLoader):
                         search_term.split("series")[0].replace("-", " ").strip()
                     )
                     return self.fetch_videos(search_term)
-
-            else:
-                print(
-                    f"No search term found  in {search_term}\nTry again with a series name in the url."
-                )
-                return
+            else: 
+                return self.fetch_videos(search_term)
 
         elif "http" in search_term and inx == 2:
             self.category = category

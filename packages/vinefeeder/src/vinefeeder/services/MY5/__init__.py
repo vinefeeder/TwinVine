@@ -66,9 +66,12 @@ class My5Loader(BaseLoader):
         # ALTERNATIVES BELOW FROM POP-UP MENU
         elif inx == 0:
             # from greedy-search OR selecting Browse-category
+            if not 'https' in search_term:
+                return self.fetch_videos(search_term)
             # example: https://www.channel5.com/the-teacher/season-2/episode-2
             # need a search keyword(s) from url
             # split and select series name
+            
             if "show" in search_term:
                 match = re.search(r"\/show\/([a-z-]+)", search_term)
 

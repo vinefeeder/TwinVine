@@ -72,11 +72,15 @@ class ULoader(BaseLoader):
         elif inx == 0:
             # from greedy-search OR selecting Browse-category
             # example  https://u.co.uk/shows/worlds-most-dangerous-roads/series-6/episode-1/6363704256112
-
-            # need a search keyword(s) from url
+            if not 'https' in search_term:
+                return self.fetch_videos(search_term)
+            # need a search keyword(s) from category url
             # split and select series name
-            search_term = search_term.split("/")[4].replace("-", " ")
-            return self.fetch_videos(search_term)
+            else:
+                # need a search keyword(s) from url
+                # split and select series name
+                search_term = search_term.split("/")[4].replace("-", " ")
+                return self.fetch_videos(search_term)
 
         elif "http" in search_term and inx == 2:
             self.category = category

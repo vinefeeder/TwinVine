@@ -110,12 +110,16 @@ class TptvLoader(BaseLoader):
         # ALTERNATIVES BELOW FROM POP-UP MENU
         elif inx == 0:
             # from greedy-search OR selecting Browse-category
-
-            search_term = search_term.split("/")[-1]
-            # fetch_videos_by_category search_term may have other params to remove
-            if "?" in search_term:
-                search_term = search_term.split("?")[0].replace("-", " ")
-            return self.fetch_videos(search_term)
+            if not 'https' in search_term:
+                return self.fetch_videos(search_term)
+            # need a search keyword(s) from category url
+            # split and select series name
+            else:
+                search_term = search_term.split("/")[-1]
+                # fetch_videos_by_category search_term may have other params to remove
+                if "?" in search_term:
+                    search_term = search_term.split("?")[0].replace("-", " ")
+                return self.fetch_videos(search_term)
 
         elif "http" in search_term and inx == 2:
             self.category = category
