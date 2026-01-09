@@ -553,7 +553,7 @@ class AMZN(Service):
 
     def get_widevine_license(self, *, challenge: bytes, title: Title_T, track) -> None:
         response = self.session.post(
-            url=self.endpoints["license"],
+            url=self.endpoints["licence"],
             params={
                 "asin": title.id,
                 "consumptionType": "Streaming",
