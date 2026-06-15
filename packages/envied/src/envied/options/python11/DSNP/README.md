@@ -23,8 +23,8 @@ uv run unshackle dl -vl all -al orig -sl ko,en,ja -q 1080,2160 -v h.264,h.265 -r
 
 ## Tips
 
-- To enable the web refresh token-based login method, please comment out or delete the DSNP section under credentials in `unshackle.yaml`.
-  웹 리프레시 토큰 기반 로그인 방식을 활성화하려면 `unshackle.yaml`의 credentials에서 DSNP부분을 주석 처리하거나 삭제하세요.
+- To enable the web refresh token-based login method, please comment out or delete the DSNP section under credentials in `envied.yaml`.
+  웹 리프레시 토큰 기반 로그인 방식을 활성화하려면 `envied.yaml`의 credentials에서 DSNP부분을 주석 처리하거나 삭제하세요.
 
   ```
   credentials:
@@ -32,8 +32,8 @@ uv run unshackle dl -vl all -al orig -sl ko,en,ja -q 1080,2160 -v h.264,h.265 -r
     # DSNP: example@example.com:example
   ```
 
-- Configure user settings within the `unshackle.yaml` file.
-  사용자 설정은 `unshackle.yaml`에서 다음과 같이 사용하세요.
+- Configure user settings within the `envied.yaml` file.
+  사용자 설정은 `envied.yaml`에서 다음과 같이 사용하세요.
 
   ```
   services:
@@ -66,8 +66,8 @@ uv run unshackle dl -vl all -al orig -sl ko,en,ja -q 1080,2160 -v h.264,h.265 -r
         # manifest_log: "info"
   ```
 
-- To enable the tier_unlimits command by default, add the following to `unshackle.yaml`.
-  tier_unlimits 명령을 기본값으로 활성화하려면 `unshackle.yaml`에 다음을 추가하세요.
+- To enable the tier_unlimits command by default, add the following to `envied.yaml`.
+  tier_unlimits 명령을 기본값으로 활성화하려면 `envied.yaml`에 다음을 추가하세요.
   ```
   dl:
     ...

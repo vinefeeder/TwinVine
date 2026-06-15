@@ -115,7 +115,7 @@ class BaseLoader:
     
     def fetch_and_parse(self, url: str, headers):
         # deals with response.text as xml
-        # first apporach - request json
+        # first approach - request json
         # second approach convert xml to json
         with httpx.Client(timeout=30) as client:
             resp = client.get(url, headers=headers)

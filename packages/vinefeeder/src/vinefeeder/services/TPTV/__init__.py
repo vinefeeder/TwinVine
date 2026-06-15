@@ -82,13 +82,13 @@ class TptvLoader(BaseLoader):
 
         if opts:
             TptvLoader.options = opts
-        self.options_list = split_options(TptvLoader.options)
+            self.options_list = split_options(TptvLoader.options)
         # direct download
 
-        if "http" in search_term and inx == 1:
+        if "http" in search_term and not 'COLLECTION' in search_term and inx == 1:
             try:
-                self.options_list = split_options(TptvLoader.options)
-                if self.options_list[0] == "":
+                #self.options_list = split_options(TptvLoader.options)
+                if not opts:
                     command = ['uv', 'run', 'envied', "dl", "TPTV", search_term]
                 else:
                     command = ['uv', 'run', 'envied', "dl", *self.options_list, "TPTV", search_term]
@@ -101,7 +101,10 @@ class TptvLoader(BaseLoader):
                 )
 
             return
-
+        elif "COLLECTION" in search_term and inx == 1:
+            search_term = search_term.split('/')[-1]
+            inx = 3
+            return self.fetch_videos(search_term)
         # keyword search
         elif inx == 3:
             print(f"Searching for {search_term}")
@@ -128,13 +131,13 @@ class TptvLoader(BaseLoader):
             )  # search_term here holds a URL!!!
 
         else:
-            print(f"Unknown error when searching for {search_term}")
+            print(f"Either an incorrect url was entered or an unknown error when searching for {search_term}")
 
         return
 
     def fetch_videos(self, search_term):
         
-        suggested_url = f"https://prod.suggestedtv.com/api/client/v2/search/{search_term}"
+        suggested_url = f"https://tptvencore.co.uk/api/core/search?q={search_term}"
 
 
 
@@ -152,38 +155,21 @@ class TptvLoader(BaseLoader):
         get_headers['Access-Control-Request-Headers'] = 'session,tenant'
         get_headers['Access-Control-Request-Method'] = 'GET'   
         get_headers['session'] = self.session_id
-        get_headers['tenant'] = 'encore'                                                                         
+        #get_headers['tenant'] = 'encore'                                                                         
         response = self.get_data(suggested_url, headers=get_headers)
         myjson = json.loads(response)
         
-        myitems = []       
-        for item in myjson['data']:
-            if  item.startswith('collection_'):
-                id = item.replace('collection_','')
-                collection_url = f"https://prod.suggestedtv.com/api/client/v1/collection/by-reference/{id}?extend=label"
-                response = self.get_data(collection_url, headers=get_headers)
-                if response:
-                    data = json.loads(response)
-                    for item in data['children']:
-                        myitems.append(item['id'].replace('product_',''))
-            elif item.startswith('product_'):
-                myitems.append(item.replace('product_',''))
-        mystring = ",".join(myitems)
-            
-        continued_search_url = "https://prod.suggestedtv.com/api/client/v1/product?ids=" + mystring + "&extend=label"
-        
-        response = self.get_data(continued_search_url, headers=get_headers)
-        data = json.loads(response)
+
         try:
-            for item in data['data']:
-                vid_id = item['reference']
-                title = item['name']
+            for item in myjson['data']:
+                url = item['video']['playback'].replace("api/core/play", "playback") 
+                title = item['title']
                 synopsis = item['description'].replace('\n', ' ')
                 if len(synopsis) > 300:
                     synopsis = f"{synopsis[:300]}  ...snip"
                 episode = {
                     "title": title,
-                    "url": vid_id,
+                    "url": url,
                     "synopsis": synopsis,
                 }
                 self.add_episode(title,episode)
@@ -211,7 +197,8 @@ class TptvLoader(BaseLoader):
         self.options_list = split_options(self.options)
         for item in selected:
             url = item[2]
-            url = f"https://tptvencore.co.uk/product/{url}"
+            id = url.split("/")[-1].replace("?locale=en", "")
+            url = f'https://tptvencore.co.uk/playback/item/{id}'
             #print(url)
             try:
                 if self.options_list[0] == "":

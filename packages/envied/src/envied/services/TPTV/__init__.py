@@ -14,6 +14,10 @@ from envied.core.service import Service
 from envied.core.titles import Episode, Movie, Movies, Series
 from envied.core.tracks import Chapters, Subtitle, Tracks
 import requests
+import uuid
+# debugging
+from rich.console import Console
+console = Console()
 
 def get_widevine_license_url(manifest_str):
     # Try JSON first
@@ -40,7 +44,7 @@ class TPTV(Service):
 
     \b
     version 1.0.4  
-    Date: June 2025
+    Date: June 2026
     Author: A_n_g_e_l_a
     Authorization: email/password for service in envied.yaml
     Robustness:
@@ -50,23 +54,36 @@ class TPTV(Service):
     Note:
         TPTV will not allow the usual -w S01-S04 syntax as TPTV is eclictic in what it serves. 
         Series and episodes carry little meaning on this platform.
-
         It is not possible to remove S00E00 from the end of a video title - envied insists.
 
+        This service is best used with Vinefeeder for its front end. 
+        Then use a search term in preference to a url.
+
+        Dealing with COLLECTION:
+        In envied, any url with COLLECTION in capitals will attempt to list the whole.
+        In vinefeeder, COLLECTION is ignored and the descriptive in the url is used as a search term.
+        eg  https://tptvencore.co.uk/details/COLLECTION/collection/01KRKTC8WZ7X584YPA5NBFYJSS/the-danziger-collection
+        will be treated as a search for "the danziger collection" in vinefeeder, but will attempt to list the whole collection in envied.
+        Series and episodes are not well defined in TPTV, the collection listing is one way to find the episodes of a series.
+        If you look on ay COLLECTON page at TPTVencore there are tabs showing series listings. Use vinefeeder to search for the series name 
+        and to produce a selectable list.
+
+        If COLLECTION name only returns one tab of results then manually from the web-page select each link url.
+        They are of the form https://tptvencore.co.uk/playback/item/6386553443112
+
+        Some restricted content will not download.
     \b
     Tips:
         Use complete url in all cases.
-        SERIES: https://tptvencore.co.uk/collection/1717422888871355373
+        SERIES: https://tptvencore.co.uk/details/COLLECTION/collection/01KRKTC8WZ7X584YPA5NBFYJSS/the-danziger-collection
         Note: TPTV do not specify Series and Episodes numbers in any meaningful and organized way. 
         They MAY sometimes be in the program title, but often incomplete. 
-        FILM: https://tptvencore.co.uk/product/the-importance-of-being-earnest-6290333578001
-        EPISODE: https://tptvencore.co.uk/product/sherlock-holmes---the-case-of-greystone-inscription-s1-ep16-6282604132001
+        FILM: https://tptvencore.co.uk/details/VIDEO/item/6390689314112/the-manster
+        EPISODE: https://tptvencore.co.uk/details/VIDEO/item/6348388311112/maigret-peter-the-lett
+        EPISODE: https://tptvencore.co.uk/playback/item/6386553443112
+        TPTV makes no distinction between films and episodes, so the above is just a convention to help you find what you want.
 
-    \b
-    Examples:
-        SERIES: https://tptvencore.co.uk/collection/1717422888871355373
-        EPISODE: https://tptvencore.co.uk/product/sherlock-holmes---the-case-of-greystone-inscription-s1-ep16-6282604132001
-        FILM: https://tptvencore.co.uk/product/the-importance-of-being-earnest-6290333578001
+
 
     """
 
@@ -129,15 +146,35 @@ class TPTV(Service):
             tokens = cache.data
         else:
             self.log.info(" + Logging in...")
-            payload = {"email": credential.username, "password": credential.password}
-            
+            random_uuid = str(uuid.uuid4())
             r = self.session.post(
                 self.config["endpoints"]["login"],
                 headers=self.session.headers,
-                json={
-                    "email": credential.username,
-                    "password": credential.password,
+
+                json= {
+                "deviceInfo": {
+                    "id": random_uuid,
+                    "hardware": {
+                    "manufacturer": "UNKNOWN/UNKNOWN",
+                    "model": "Zimbadoo",
+                    "version": "151.0"
+                    },
+                    "os": {
+                    "name": "RisingHillOS",
+                    "version": "x86_64"
+                    },
+                    "display": {
+                    "width": 3840,
+                    "height": 2048,
+                    "formFactor": "THEATRE"
+                    },
+                    "legal": {}
                 },
+                "values": {
+                    "email":  credential.username,
+                    "password": credential.password
+                }
+                }
             )
             try:
                 res = r.json()
@@ -152,74 +189,13 @@ class TPTV(Service):
         self.authorization = tokens
 
     def search(self) -> Generator[SearchResult, None, None]:
-        query = self.title.replace(" ", "+")
-        search_url = self.config["endpoints"]["search"].replace("{query}", query)
-        session_id = self.session.headers['session']
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0',
-            'Accept': '*/*',
-            'Accept-Language': 'en-GB,en;q=0.5',
-            'Referer': 'https://tptvencore.co.uk/',
-            'session': session_id,
-            'tenant': 'encore',
-            'Origin': 'https://tptvencore.co.uk',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'cross-site',
-            'Priority': 'u=4',
-        }
-        r = self.session.get(search_url, headers=headers)
-        if r.status_code != 200:
-            raise ConnectionError(f"Search failed with {r.status_code}: {r.text}")     
+        print(f"Searching not implemented in Envied for TPTVencore. Please use VineFeeder instead.")
+        return None
 
-        results = r.json()["data"]
-        myitems = [] 
-        if isinstance(results, list):
-            for result in results:
-                # do lookup on list item product or collection    
-                if  result.startswith('collection_'):
-                    id = result.replace('collection_','')
-                    collection_url = f"https://prod.suggestedtv.com/api/client/v1/collection/by-reference/{id}?extend=label"
-                    response = self.session.get(collection_url, headers=headers)
-                    if response.status_code == 200:
-                        data = response.json()
-                        for item in data['children']:        
-                            myitems.append(item['id'].replace('product_',''))
-                    else:
-                        print(f"Error: {response.status_code} - {response.text}")
-                else:
-                    myitems.append(result.replace('product_',''))
-                    mystring = ",".join(myitems)
-                
-            continued_search_url = "https://prod.suggestedtv.com/api/client/v1/product?ids=" + mystring + "&extend=label"
-            
-            response = self.session.get(continued_search_url, headers=headers)
-            response.raise_for_status
-            results = response.json()
-            if isinstance(results, list):
-                items = results  
-            elif isinstance(results, dict) and "data" in results:
-                items = results["data"]
-            else:
-                raise ValueError("Unexpected search result format")
 
-            for item in items:
-                try:
-                    yield SearchResult(
-                        id_=item.get("reference"),
-                        title=item.get("name"),
-                        description=item.get("description", "").replace('\n', ' '),
-                        label=item.get("type", ""),
-                        url=f"https://tptvencore.co.uk/product/{item.get('reference')}",
-                    )
-                except Exception as e:
-                    print(f"Failed to yield item: {e}")
-
-    def get_titles(self) -> Union[Movies, Series]:
+    '''def get_titles(self) -> Union[Movies, Series]:
         data = self.get_data(self.title)
-        ids = ",".join(data)
+        #ids = ",".join(data)
 
         headers = {
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0',
@@ -237,30 +213,220 @@ class TPTV(Service):
         }
         session_id = self.session.headers['session']
         headers['session'] = session_id
-        params = {
-            'ids': ids,
-            'extend': 'label',
+        se_pattern = re.compile(
+            r"\(\s*S\s*(?P<series>\d+)\s*,\s*EP\s*(?P<episode>\d+)\s*\)",
+            re.IGNORECASE
+        )
+        if len(data) > 1:
+            # multiple items, treat as a series
+            episodes = []
+            for item_id in data:
+                print(len(str(item_id)))
+                if len(str(item_id)) > 20:  # Skip item IDs that too long
+                    continue
+                  # Skip this item if it too long to be valid.
+
+                try:  # two possible endpoints for item data, try both
+                    response = self.session.get(f'https://tptvencore.co.uk/api/core/catalog/item/{item_id}?locale=en', headers=headers)                            
+                    if response.status_code != 200:
+                        raise Exception()
+                except:
+                    try:
+                        response = self.session.get(f'https://tptvencore.co.uk/api/core/catalog/collection/{item_id}?locale=en', headers=headers)
+                        if response.status_code != 200:
+                            raise Exception()
+                    except:
+                        continue # next item if both endpoints fail, thus ignore.
+
+                
+                    mydata = json.loads(response.text)
+
+                    f = open("tptv_debug.json", "w")
+                    f.write(json.dumps(mydata, indent=4))
+                    f.close()
+                    console.print_json(data=mydata)
+                    exit(0)
+
+                    item = mydata['data']
+                    title = mydata.get("title")
+                    # some series exist with season/episode info,(most do not),  
+                    # so we try to extract it from the title if possible
+                    match = se_pattern.search(title)
+                    if match:
+                        season = int(match.group("series"))
+                        number = int(match.group("episode"))
+                    else:
+                        season = 0
+                        number = 0
+
+                    episodes.append(
+                        Episode(
+                            id_=item["id"],
+                            service=self.__class__,
+                            title=title,
+                            season=season or 0,
+                            number=number or 0,
+                            name="",
+                            language="en",
+                            data=item,
+                        )
+                    )
+            #return Series(episodes)
+        else:
+            try:
+                response = self.session.get(f'https://tptvencore.co.uk/api/core/catalog/collection/{data[0]}?page=1&pageSize=20&locale=en', headers=headers)
+
+                if response.status_code != 200:
+                    raise ConnectionRefusedError()
+            except:
+                try:
+                    response = self.session.get(f'https://tptvencore.co.uk/api/core/catalog/item/{data[0]}?locale=en', headers=headers)
+                except:
+                    raise ConnectionError("Failed to retrieve title data")
+                
+                mydata = json.loads(response.text)
+                titles = mydata['data']
+
+                episodes = []
+                season = 0
+                number = 0
+                if (len(mydata)) > 1:
+                    for item in titles:
+                        title = item["title"]
+                        # some series exist with season/episode info,(most do not),  
+                        # so we try to extract it from the title if possible
+                        match = se_pattern.search(title)
+                        if match:
+                            season = int(match.group("series"))
+                            number = int(match.group("episode"))
+
+                        episodes.append(
+                            Episode(
+                                id_=item["id"],
+                                service=self.__class__,
+                                title=title,
+                                season=season or 0,
+                                number=number or 0,
+                                
+                                name="",
+                                language="en",
+                                data=item,
+                            )
+                        )
+                else:
+                    # single item, treat as a movie
+                    item = titles
+                    title = item["title"]
+                    # some series exist with season/episode info,(most do not),  
+                        # so we try to extract it from the title if possible
+                    match = se_pattern.search(title)
+                    if match:
+                        season = int(match.group("series"))
+                        number = int(match.group("episode"))
+                    episodes.append(
+                        Episode(
+                            id_=item["id"],
+                            service=self.__class__,
+                            title=item["title"],
+                            season=season or 0,
+                            number=number or 0,
+                            name="",
+                            language="en",
+                            data=item,
+                        )
+                    )
+        return Series(episodes)'''
+    
+    def get_titles(self) -> Union[Movies, Series]:
+        data = self.get_data(self.title)
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0",
+            "Accept": "*/*",
+            "Accept-Language": "en-GB,en;q=0.5",
+            "Referer": "https://tptvencore.co.uk/",
+            "tenant": "encore",
+            "Origin": "https://tptvencore.co.uk",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "cross-site",
+            "Priority": "u=4",
+            "session": self.session.headers["session"],
         }
 
-        response = self.session.get('https://prod.suggestedtv.com/api/client/v1/product', params=params, headers=headers)
-        if response.status_code == 200:
-            mydata=json.loads(response.text)
-            titles = mydata['data']
-            episodes =[
-                    Episode(
-                        id_=episode["id"],
-                        service=self.__class__,
-                        title=episode["name"],
-                        season=0,
-                        number=0,
-                        name = '',
-                        language="en",  # TODO: language detection
-                        data=episode,
-                    )
-                    for episode in titles
-                ]
-            return Series(episodes)
+        se_pattern = re.compile(
+            r"\(\s*S\s*(?P<season>\d+)\s*,\s*EP\s*(?P<episode>\d+)\s*\)",
+            re.IGNORECASE,
+        )
 
+        def extract_se(title: str) -> tuple[int, int]:
+            match = se_pattern.search(title or "")
+            if not match:
+                return 0, 0
+
+            return int(match.group("season")), int(match.group("episode"))
+
+        def fetch_json(item_id: str | int) -> dict | None:
+            """
+            Try item endpoint first, then collection endpoint.
+            Return decoded JSON or None if both fail.
+            """
+            urls = [
+                f"https://tptvencore.co.uk/api/core/catalog/item/{item_id}?locale=en",
+                f"https://tptvencore.co.uk/api/core/catalog/collection/{item_id}?page=1&pageSize=20&locale=en",
+                f"https://tptvencore.co.uk/api/core/catalog/collection/{item_id}?locale=en",
+            ]
+
+            for url in urls:
+                response = self.session.get(url, headers=headers)
+                if response.status_code == 200:
+                    return response.json()
+
+            return None
+
+        def make_episode(item: dict) -> Episode:
+            title = item.get("title", "")
+            season, number = extract_se(title)
+
+            return Episode(
+                id_=item["id"],
+                service=self.__class__,
+                title=title,
+                season=season,
+                number=number,
+                name="",
+                language="en",
+                data=item,
+            )
+
+        episodes = []
+
+        for item_id in data:
+            # Skip bogus IDs
+            if len(str(item_id)) > 20:
+                continue
+
+            mydata = fetch_json(item_id)
+            if not mydata:
+                continue
+
+            titles = mydata.get("data")
+
+            if not titles:
+                continue
+
+            # Collection endpoint may return a list of items
+            if isinstance(titles, list):
+                for item in titles:
+                    episodes.append(make_episode(item))
+
+            # Item endpoint returns a single dict
+            elif isinstance(titles, dict):
+                episodes.append(make_episode(titles))
+
+        return Series(episodes)
 
     def get_tracks(self, title: Union[Movie, Episode]) -> Tracks:
         playlist = f"https://edge.api.brightcove.com/playback/v1/accounts/6272132012001/videos/{title.data.get('id')}"
@@ -314,24 +480,25 @@ class TPTV(Service):
 
     def get_data(self, url: str) -> dict:
         self.session.headers.update({'tenant': 'encore'})
-        if 'details' in url:
-            prod_id = url.split('item/')[-2]
-            url = f"https://prod.suggestedtv.com/api/client/v1/collection/by-reference/{prod_id}?extend=label"
+        if 'COLLECTION' in url:
+            prod_id = url.split('/')[-2]
+            url = f"https://tptvencore.co.uk/api/core/catalog/collection/{prod_id}"
+
             r = self.session.get(url)
             if r.status_code != 200:
                 raise ConnectionError(r.text)
             
             myjson = r.json()
-            children = myjson.get('children')
+            data = myjson.get("data", {})
             product_links = []
-            for child in children:
-                product_links.append(child['id']) if 'product' in child.get('classification') else None
+            for child in data:
+                product_links.append(child.get('id', {})) if child.get('id', {}) else None
             return product_links
         elif 'playback' in url:  # single item
             prod_id = url.split('/')[-1] 
             return [prod_id]
-        elif 'VIDEO' in url:
+        elif 'details' in url:
             prod_id = url.split('/')[-2]
             return [prod_id]
         else:
-            raise ValueError("URL format not recognized for data retrieval.")
+            raise ValueError("URL format not recognized for data retrieval in proc get_data().")
