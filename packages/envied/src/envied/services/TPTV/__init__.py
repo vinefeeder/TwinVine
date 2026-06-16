@@ -185,7 +185,7 @@ class TPTV(Service):
             tokens = res
             self.log.info(" + Acquired tokens...")
 
-        # cache.set(tokens)
+            cache.set(tokens)
 
         self.authorization = tokens
 
