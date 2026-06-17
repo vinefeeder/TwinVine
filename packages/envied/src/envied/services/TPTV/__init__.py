@@ -43,7 +43,7 @@ class TPTV(Service):
     Service code for TPTVencore streaming service (https://www.TPTVencore.co.uk/).
 
     \b
-    version 1.0.4  
+    version 1.0.6 
     Date: June 2026
     Author: A_n_g_e_l_a
     Authorization: email/password for service in envied.yaml
