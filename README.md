@@ -170,8 +170,98 @@ ALL4  AUBC  CBS CWTV DSCP  iP   MAX   MY5   NF   PCOK PLEX RTE  ROKU  SPOT  TPTV
 ARD   CBC   CTV  DSNP  ITV  MTSP  NBLA  NRK  PLUTO  RTE   STV   TUBI  UKTV  ZDF
 These services have web-origins and not all have been tested by me.  
 
+**Use AI to create your own Vinefeeder service**
+
+Here is a prompt that chatGPT generated itself after rewriting an existing service that had addopted an new API.
+I finally realised that there ws much code duplication between vinfeeder and envied and I might as well import 
+and use envied code in vinefeeder to make service creation easier and faster.
+
+```
+I am working on the TwinVine project:
+
+https://github.com/vinefeeder/TwinVine
+
+TwinVine contains two Python packages:
+
+* `envied`: a command-line video downloader.
+* `vinefeeder`: a graphical / interactive front end that searches, lists, selects, and then calls `envied` by subprocess.
+
+I want to create or rewrite a Vinefeeder service by reusing the matching envied service instead of duplicating API logic.
+
+Target service:
+
+* Envied service path:
+  `packages/envied/src/envied/services/<SERVICE>/`
+
+* Vinefeeder service path:
+  `packages/vinefeeder/src/vinefeeder/services/<SERVICE>/`
+
+Please inspect the current code in both locations.
+
+Goal:
+
+Rewrite the Vinefeeder `<SERVICE>` service so that it imports and reuses the existing envied `<SERVICE>` service class wherever possible.
+
+The Vinefeeder service should:
+
+1. Preserve the standard Vinefeeder service interface:
+
+   * `receive()`
+   * `fetch_videos()`
+   * `second_fetch()`
+   * `fetch_videos_by_category()`
+
+2. Use the envied service for:
+
+   * authentication / token handling
+   * search, if the envied service provides `search()`
+   * programme/title expansion via `get_titles()` or `get_titles_cached()`
+   * service-specific API calls already implemented in envied
+
+3. Avoid reimplementing API endpoints that already exist in envied.
+
+4. Keep Vinefeeder responsible only for:
+
+   * presenting search results
+   * letting the user choose a title
+   * expanding a multi-episode series into selectable individual episodes
+   * building one envied subprocess command per selected single title
+
+5. Use `beaupy.select_multiple()` when there are multiple episodes available.
+
+6. If the selected item is a movie, sport event, clip, highlight, or single episode, skip the beaupy episode list and call envied directly.
+
+7. Preserve Vinefeeder’s existing download behaviour by calling:
+
+   `self.runsubprocess(command)`
+
+   where command should normally be shaped like:
+
+   `["uv", "run", "envied", "dl", *self.options_list, "<SERVICE>", url]`
+
+8. Preserve support for Vinefeeder service options from config, using `split_options()` as existing services do.
+
+9. If an envied service object needs a Click context, create the smallest safe adapter context needed rather than copying envied command-line internals unnecessarily.
+
+10. If the envied service requires credentials, token cache, proxy state, or service config, reuse envied’s existing config-loading patterns as closely as possible.
+
+11. Be careful not to authenticate twice unnecessarily. If `fetch_videos()` and `second_fetch()` are sequential, prefer reusing an already-authenticated envied service instance where safe.
+
+12. Produce a complete replacement `__init__.py` for the Vinefeeder service.
+
+13. Also explain:
+
+* which envied methods/classes are being reused
+* what Vinefeeder-specific logic remains
+* any assumptions or caveats
+* how I should test the rewritten service
+
+Please do not merely describe the approach. Provide the actual rewritten Vinefeeder service code.
+```
+So with that you may write your own vinefeeder service and place the folder in packages/vinefeeder/src/vinefeeder/services/
+
 **Servies Note**
-Some services may be found in an options folder (packages/envied/src/envied/options/).  The may have constraints on the python version they run under. Only copy a  service into the packages/envied/src/envied/services folder if the version matches yours.
+Some services may be found in an options folder (packages/envied/src/envied/options/).  They may have constraints on the python version they run under. Only copy a  service into the packages/envied/src/envied/services folder if the version matches yours.
   
 **Other README's""
     TwinVine/packages/vinefeeder/src/vinefeeder/README.md  
