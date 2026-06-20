@@ -24,7 +24,7 @@ def get_widevine_license_url(manifest_str):
     try:
         data = json.loads(manifest_str)
         for source in data.get("sources", []):
-            widevine = source.get("key_systems", {}).get("com.wienvied.alpha")
+            widevine = source.get("key_systems", {}).get("com.widevine.alpha")
             if widevine and "license_url" in widevine:
                 return widevine["license_url"]
     except json.JSONDecodeError:
@@ -48,7 +48,7 @@ class TPTV(Service):
     Author: A_n_g_e_l_a
     Authorization: email/password for service in envied.yaml
     Robustness:
-        DRM free... with rare exceptions
+        DRM free... with rare exceptions L3
 
     \b
     Note:

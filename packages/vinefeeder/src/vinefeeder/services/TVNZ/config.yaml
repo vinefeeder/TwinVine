@@ -1,6 +1,6 @@
 service: TVNZ
 
-options: --select-titles
+options: 
 
 media_dict: 
   Drama: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/drama

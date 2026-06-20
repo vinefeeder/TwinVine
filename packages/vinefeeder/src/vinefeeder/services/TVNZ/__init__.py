@@ -1,436 +1,482 @@
-# TVNZ __init__.py
+from __future__ import annotations
+
+import copy
+from importlib.resources import files
+from types import SimpleNamespace
+from typing import Any
+from urllib.parse import urlparse
+
+import click
+from unshackle.core import service
+import yaml
+from beaupy import select_multiple
+from rich.console import Console
+
 from vinefeeder.base_loader import BaseLoader
 from vinefeeder.parsing_utils import split_options, list_prettify
-from rich.console import Console
-from beaupy import select_multiple
-import json
-console = Console()
 
-# TV Shows https://www.tvnz.co.nz/shows/boiling-point/episodes/s1-e1 or
-# Movies https://www.tvnz.co.nz/shows/legally-blonde/movie/s1-e1 or
-# Sport https://www.tvnz.co.nz/sport/football/uefa-euro/spain-v-france-semi-finals-highlights
+from envied.core import binaries
+from envied.core.config import config as envied_config
+from envied.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
+from envied.core.titles import Movies, Series
+from envied.services.TVNZ import TVNZ as EnviedTVNZ
+
+console = Console()
 
 
 class TvnzLoader(BaseLoader):
-    # global options
+    """
+    Vinefeeder adapter for TVNZ using some code from StabbedByBrick's service.
+    This service was written by AI.
+
+    Keep TVNZ API/login/catalogue logic in envied.services.TVNZ.
+    Vinefeeder's job here is only:
+
+    1. search and display programme-level results;
+    2. expand a chosen TV series into individual envied Episode titles;
+    3. let the user choose individual episodes with beaupy;
+    4. call envied once per selected single title.
+    """
+
     options = ""
 
     def __init__(self):
-        """
-        Initialize the All4Loader class with the provided headers.
-
-        Parameters:
-            None
-
-        Attributes:
-            options (str): Global options; later taken from service config.yaml
-            headers (dict): Global headers; may be overridden
-        """
-
         headers = {
             "Accept": "*/*",
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64)",
-            #'Origin': 'https://www.tvnz.co.nz',
-            #'Referer': 'https://www.tvnz.co.nz',
         }
         super().__init__(headers)
-        self.showType = None
+        self.options_list: list[str] = []
+        self.category = None
+        self._tvnz_service: EnviedTVNZ | None = None
 
-    # entry point from Vinefeeder
+    # ---------------------------------------------------------------------
+    # Vinefeeder entry points
+    # ---------------------------------------------------------------------
+
     def receive(
-        self, inx: None, search_term: None, category=None, hlg_status=False, opts=None
+        self,
+        inx: int | None,
+        search_term: str | None,
+        category=None,
+        hlg_status=False,
+        opts=None,
     ):
-        """
-        First fetch for series titles matching all or part of search_term.
-
-        Uses inx, an int variable to switch:-
-            0 for greedy search using url
-            1 for direct url download
-            2 for category browse
-            3 for search with keyword
-        If search_url_entry is left blank vinefeeder generates a
-        a menu with 3 options:
-            - Greedy Search by URL
-            - Browse by Category
-            - Search by Keyword
-        results are forwarded to receive().
-        If inx == 1, do direct download using url.
-        If inx == 3, do keyword search.
-        If inx == 0, fetch videos using a greedy search or browse-category.
-        If inx == 2, fetch videos from a category url.
-        If an unknown error occurs, exit with code 0.
-        """
-
-        # re-entry here for second time loses options settings
-        # so reset
-        if opts:
+        if opts is not None:
             TvnzLoader.options = opts
-        self.options_list = split_options(TvnzLoader.options)
-        # direct download
 
-        if "http" in search_term and inx == 1:
-            try:
-                if self.options_list[0] == "":
-                    command = ['uv', 'run', 'envied', "dl", "TVNZ", search_term]
-                else:
-                    command = ['uv', 'run', 'envied', "dl", *self.options_list, "TVNZ", search_term]
-                self.runsubprocess(command)
-                return
-            except Exception as e:
-                print(
-                    "Error downloading video:",
-                    e,
-                    "Is self.DOWNLOAD_ORCHESTRATOR installed correctly via 'pip install self.DOWNLOAD_ORCHESTRATOR?",
-                )
-                return
+        self.options_list = self._normalised_options()
+        search_term = (search_term or "").strip()
 
-        # keyword search
-        elif inx == 3:
-            print(f"Searching for {search_term}")
+        if not search_term:
+            print("No search term or URL supplied.")
+            return None
+
+        # Direct download from the GUI URL field.
+        if inx == 1 and self._looks_like_url(search_term):
+            return self._download_url(search_term)
+
+        # Keyword search.
+        if inx == 3:
+            print(f"Searching TVNZ for {search_term}")
             return self.fetch_videos(search_term)
 
-        #  POP-UP MENU alternates:
-        elif inx == 0:
-            # from greedy-search OR selecting Browse-category
-            # need a search keyword(s) from url
-            # split and select series name
-            if not 'https' in search_term:
-                return self.fetch_videos(search_term)
-            # need a search keyword(s) from category url
-            # split and select series name
-            else:
-                search_term = search_term.split("/")[4]
+        # Greedy mode: URL means expand it; plain text means search it.
+        if inx == 0:
+            if self._looks_like_url(search_term):
+                return self.second_fetch(self._normalise_tvnz_url(search_term))
+            return self.fetch_videos(search_term)
 
-                return self.fetch_videos(search_term)
-
-        elif "http" in search_term and inx == 2:
+        # Category browse is now only a light wrapper.  TVNZ's old category API
+        # was part of the code we are intentionally not duplicating.
+        if inx == 2 and self._looks_like_url(search_term):
             self.category = category
-            self.fetch_videos_by_category(
-                search_term
-            )  # search_term here holds a URL!!!
+            return self.fetch_videos_by_category(search_term)
 
-        else:
-            print(f"Unknown error when searching for {search_term}")
-
-        return
-
-    def fetch_videos(self, search_term):
-        """Fetch videos from TVNZ using a search term.
-        Here the first search for series titles matches all or part of search_term.
-        The function will prepare the series data, matching the search term for display.
-        """
-        # returns json as type String
-        #url = f"https://apis-public-prod.tech.tvnz.co.nz/api/v1/web/play/search?q={search_term}"
-        url = f"https://search-cdn.cms-api.tvnz.co.nz/content/search?mode=detail&st=published&term={search_term}&pageNumber=1&pageSize=50&reg=nz&dt=web&client=tvnz-tvnz-web&pf=regular&allowpg=false"
-        try:
-            html = self.get_data(url)
-            if "No Matches" in html:
-                print("Nothing found for that search; try again.")
-                return
-            else:
-                parsed_data = self.parse_data(html)  # to json
-        except Exception:
-            print(f"No valid data returned for {url}")
-            return
-        '''# console.print_json(data=parsed_data)
-        f = open('tvnz.json', 'w')
-        f.write(json.dumps(parsed_data))  # parsed_data)
-        f.close()'''
-  
-        if parsed_data and "Success" in parsed_data["header"]["message"]:
-            for item in parsed_data["data"]:
-                title = item.get("lon", [{"n": ""}])[0].get("n")
-                content_type = item.get("cty")
-                content_id = item.get("nu")
-                synopsis = item.get("losd", [{"n": ""}])[0].get("n")
-                url=f"https://tvnz.co.nz/{content_type}/{content_id}"
-                episode = {
-                    "type": content_type, 
-                    "title": title,
-                    "url": url,
-                    "synopsis": synopsis,
-                }
-                self.add_episode(title, episode)
-        else:
-            print(f"No valid data returned for {url}")
-            return None
-        selected_series = self.display_series_list()
-        if selected_series:
-            return self.second_fetch(
-                selected_series
-            )  # Return URLs for selected episodes
+        print(f"Unknown TVNZ request: inx={inx!r}, search_term={search_term!r}")
         return None
 
-    def second_fetch(self, selected):
-        # TVNZ video type: sportVideo, showVideo or Movie
-        # makes this extractor unusual and should not be used
-        # to model other services
+    def fetch_videos(self, search_term: str):
         """
-        Given a selected series name, fetch its HTML and extract its episodes.
-        Or if given a direct url, fetch it and process for greedy download.
-        The function will prepare the series data for episode selection and display the final episode list.
-        It will return the URLs for the selected episodes.
+        First pass: use envied TVNZ search(), then let Vinefeeder choose a title.
+
+        The data stored in BaseLoader.series_data is deliberately small:
+        just enough for Vinefeeder's programme picker and second_fetch().
         """
-        if "https" in selected:  # direct url provided skip url preparation
-            url = selected
-        else:
-            # initial pass to find type
-            series_name = (
-                selected.lower().replace(" ", "-").replace(":", "").replace(",", "")
-            )
-            episodes = self.get_series_data()
-            episode_test = episodes[selected][0]
-            type = episode_test.get("type")
-            beaupylist = []
-            # if sport video / news video - assume no episodes
-            # use data from first fetch directly
-            if type == "tvseries":
-                for item in episodes[selected]:  # existing data
-                    url = "https://www.tvnz.co.nz/" + item.get("url").split("/page/")[1]
-                    beaupylist.append(
-                        [
-                            item.get("title"),
-                            url,
-                            item.get("synopsis", "No synopsis available."),
-                        ]
-                    )
+        self.clear_series_data()
 
-                selected = select_multiple(
-                    beaupylist,
-                    preprocessor=lambda val: list_prettify(val),
-                    minimal_count=1,
-                    cursor_style="pink1",
-                    pagination=True,
-                    page_size=8,
-                )
-
-                for item in selected:
-                    url = item[1]
-                    if self.options_list[0] == "":
-                        command = ['uv', 'run', 'envied', "dl", "TVNZ", url]
-                    else:
-                        command = ['uv', 'run', 'envied', "dl", *self.options_list, "TVNZ", url]
-                    self.runsubprocess(command)
-                return None
-
-            elif type == "movie" or type == "tvseries":
-                url = f"https://apis-public-prod.tech.tvnz.co.nz/api/v1/web/play/page/shows/{series_name}/episodes"
-                try:
-                    html = self.get_data(url)
-                    parsed_data = self.parse_data(html)
-                except Exception:
-                    try:
-                        # direct download as seems only one episode
-                        # https://www.tvnz.co.nz/shows/circle-of-friends/movie/s1-e1
-                        url = f"https://www.tvnz.co.nz/{type}/{series_name}/s1-e1"
-                        if self.options_list[0] == "":
-                            command = ['uv', 'run', 'envied', "dl", "TVNZ", url]
-                        else:
-                            command = ['uv', 'run', 'envied', "dl", *self.options_list, "TVNZ", url]
-                        self.runsubprocess(command)
-                        return
-
-                    except Exception as e:
-                        print(
-                            "Error downloading video:",
-                            e,
-                            "Is self.DOWNLOAD_ORCHESTRATOR installed correctly via 'pip install self.DOWNLOAD_ORCHESTRATOR?",
-                        )
-                        return
-                try:
-                    href_list = []
-                    # iterate over all seasons and capture url for each
-                    for item in parsed_data["layout"]["slots"]["main"]["modules"][0][
-                        "lists"
-                    ]:
-                        href_list.append(item["href"])
-                except Exception:
-                    # object►layout►slots►main►modules►0►mobiledoc►sections►0►2►0►3
-                    try:
-                        message = parsed_data["layout"]["slots"]["main"]["modules"][0][
-                            "mobiledoc"
-                        ]["sections"][0][2][0][3]
-                        print(
-                            "There is no content for this series. TVNZ says ..."
-                            + message
-                        )
-                    except Exception:
-                        print(f"No valid data returned for {url}")
-                    return
-        # with season url, iterate over each season and capture episodes
         try:
-            for url in href_list:  #  for all seasons
-                url = "https://apis-edge-prod.tech.tvnz.co.nz" + url
-                myhtml = self.get_data(url=url)
-                parsed_data = self.parse_data(myhtml)
-                if parsed_data and "_embedded" in parsed_data:
-                    try:
-                        for item_key, item in parsed_data["_embedded"].items():
-                            series_no = item.get("seasonNumber", "100")
-                            myurl = "https://www.tvnz.co.nz" + item.get("page", {}).get(
-                                "url", ""
-                            )
-                            episode_no = item.get("episodeNumber", None)
-                            synopsis = item.get("synopsis", "No synopsis available")
-                            episode = {
-                                "series_no": series_no,
-                                "title": episode_no,
-                                "url": myurl,
-                                "synopsis": synopsis,
-                            }
-                            self.add_episode(series_name, episode)
-                    except Exception:
-                        pass  # disregard any episode that does not fit the scheme
+            service = self._envied_tvnz(search_term, authenticate=True)
+            self._tvnz_service = service
+            results = list(service.search())
+        except SystemExit:
+            return None
+        except Exception as e:
+            print(f"TVNZ search failed: {e}")
+            return None
 
-                else:
-                    print(f"No valid data at {url} found.\n Exiting")
-                    return
-        except Exception:
-            print(f"No valid data returned for {url}")
-            return
+        if not results:
+            print(f"No TVNZ matches found for {search_term!r}.")
+            return None
 
-        self.options_list = split_options(self.options)
-        # direct download single items
-        if self.get_number_of_episodes(series_name) == 1:
-            item = self.get_series(series_name)[0]
-            # check if has https://www.tvnz.co.nz
+        for result in results:
+            title = result.title or "Unknown Title"
+            self.add_episode(
+                title,
+                {
+                    "type": result.label,
+                    "title": result.title,
+                    "url": self._normalise_tvnz_url(result.url or str(result.id)),
+                    "synopsis": result.description or "No synopsis available.",
+                },
+            )
 
-            if "https://www.tvnz.co.nz" in item["url"]:
-                url = item["url"]
+        selected_series = self.display_series_list()
+        if selected_series:
+            return self.second_fetch(selected_series)
+
+        return None
+
+    def second_fetch(self, selected: str):
+        """
+        Expand the selected TVNZ result.
+
+        * tvseries with 2+ episodes: show a beaupy multi-select list.
+        * tvseries with 1 episode: call envied for that one episode.
+        * movie/event/highlight/news clip/sport clip: call envied directly.
+        """
+        self.options_list = self._normalised_options()
+
+        selected_url = self._selected_to_url(selected)
+        if not selected_url:
+            print(f"No TVNZ URL found for {selected!r}.")
+            return None
+
+        selected_url = self._normalise_tvnz_url(selected_url)
+
+        try:
+            service = self._tvnz_service
+
+            if service is None:
+                # Direct URL / greedy path: second_fetch may be entered without fetch_videos()
+                service = self._envied_tvnz(selected_url, authenticate=True)
             else:
-                url = f'https://www.tvnz.co.nz{item["url"]}'
-            try:
-                if self.options_list[0] == "":
-                    command = ['uv', 'run', 'envied', "dl", "TVNZ", url]
-                else:
-                    command = ['uv', 'run', 'envied', "dl", *self.options_list, "TVNZ", url]
-                self.runsubprocess(command)
+                # Reuse the authenticated envied TVNZ instance,
+                # but point it at the selected TVNZ URL before get_titles_cached().
+                service.title = selected_url
+
+            titles = service.get_titles_cached()
+
+        except SystemExit:
+            return None
+        except Exception as e:
+            print(f"TVNZ title lookup failed for {selected_url}: {e}")
+            return None
+        # Movies also covers TVNZ sport events, highlights and clips in the
+        # envied TVNZ implementation.
+        if isinstance(titles, Movies):
+            return self._download_url(selected_url)
+
+        if not isinstance(titles, Series):
+            # Defensive fallback for any future envied title container.
+            return self._download_url(selected_url)
+
+        episodes = list(titles)
+
+        # Single tvepisode, or a "series" container that only has one playable
+        # item: no list required.
+        if len(episodes) <= 1:
+            if not episodes:
+                print(f"No playable TVNZ episodes found for {selected_url}.")
                 return None
-            except Exception as e:
-                print(
-                    "Error downloading video:",
-                    e,
-                    "Is self.DOWNLOAD_ORCHESTRATOR installed correctly via 'pip install self.DOWNLOAD_ORCHESTRATOR?",
-                )
-                return
-        # else present list of series and display for multiple selection
-        self.prepare_series_for_episode_selection(
-            series_name
-        )  # creates list of series; allows user selection of wanted series prepares an episode list over chosen series
-        self.final_episode_data = self.sort_episodes(self.get_final_episode_list())
-        selected_final_episodes = self.display_final_episode_list(
-            self.final_episode_data
+            return self._download_url(self._title_to_url(episodes[0], fallback=selected_url))
+
+        beaupylist = []
+        for episode in episodes:
+            url = self._title_to_url(episode, fallback=selected_url)
+            beaupylist.append(
+                [
+                    self._season_episode_label(episode),
+                    episode.name or episode.title,
+                    url,
+                    self._synopsis(episode.data),
+                ]
+            )
+
+        selected_episodes = select_multiple(
+            beaupylist,
+            preprocessor=lambda val: list_prettify(val),
+            minimal_count=1,
+            cursor_style="pink1",
+            pagination=True,
+            page_size=8,
         )
 
-        for item in selected_final_episodes:
-            url = item.split(",")[2].lstrip()
-
-            if url == "None":
-                print(f"No valid URL for {item.split(',')[1]}")
+        for item in selected_episodes:
+            url = item[2]
+            if not url:
+                print(f"No valid TVNZ URL for {item[0]} {item[1]}")
                 continue
+            self._download_url(url)
 
-            if self.options_list[0] == "":
-                command = ['uv', 'run', 'envied', "dl", "TVNZ", url]
-            else:
-                command = ['uv', 'run', 'envied', "dl", *self.options_list, "TVNZ", url]
-            self.runsubprocess(command)
+        return None
 
-        return
-
-    def fetch_videos_by_category(self, browse_url):
+    def fetch_videos_by_category(self, browse_url: str):
         """
-        Fetches videos from a category (VERY TVNZ specific).
-        Args:
-            browse_url (str): URL of the category page.
-        Returns:
-            None
+        TVNZ category browsing used to rely on the old public web/category API.
+
+        With the current envied TVNZ service the reliable path is:
+        category URL -> derive a search phrase -> envied TVNZ search().
         """
+        term = self._search_term_from_url(browse_url)
+        if not term:
+            print(f"Cannot derive a TVNZ search term from {browse_url!r}.")
+            return None
+        return self.fetch_videos(term)
+
+    # ---------------------------------------------------------------------
+    # Envied adapter
+    # ---------------------------------------------------------------------
+
+    def _envied_tvnz(self, title: str, authenticate: bool = True) -> EnviedTVNZ:
+        """
+        Build just enough Click context for envied.services.TVNZ.TVNZ to run
+        outside the envied CLI command.
+
+        This deliberately mirrors the envied command path:
+        ctx.obj.config is the service config;
+        ctx.obj.cdm may be None because Vinefeeder is only reading metadata;
+        ctx.obj.proxy_providers is populated from envied.yaml where possible.
+        """
+        parent = click.Context(click.Command("dl"))
+        parent.params = {
+            "profile": self._option_value("--profile", "-p"),
+            "proxy": self._option_value("--proxy"),
+            "proxy_query": None,
+            "proxy_provider": None,
+            "no_proxy": self._has_option("--no-proxy"),
+            "vcodec": [],
+            "range_": [],
+            "best_available": False,
+            "no_cache": self._has_option("--no-cache"),
+            "reset_cache": self._has_option("--reset-cache"),
+        }
+
+        ctx = click.Context(click.Command("TVNZ"), parent=parent)
+        ctx.obj = SimpleNamespace(
+            config=self._load_envied_tvnz_config(),
+            cdm=None,
+            proxy_providers=self._load_envied_proxy_providers(parent.params["no_proxy"]),
+        )
+
+        service = EnviedTVNZ(ctx, title=title)
+
+        if authenticate:
+            # TVNZ.__init__ has already resolved the correct credential/cache
+            # object. Passing that same credential avoids Service.authenticate()
+            # replacing it with None.
+            service.authenticate(None, getattr(service, "credential", None))
+
+        return service
+
+    def _load_envied_tvnz_config(self) -> dict[str, Any]:
+        packaged_config: dict[str, Any] = {}
 
         try:
-            req = self.get_data(browse_url, headers=self.headers)
+            config_text = files("envied.services.TVNZ").joinpath("config.yaml").read_text(
+                encoding="utf-8"
+            )
+            packaged_config = yaml.safe_load(config_text) or {}
+        except Exception:
+            packaged_config = {}
 
-            # Parse the json returned
-            parsed_data = self.parse_data(req)
+        user_config = copy.deepcopy(envied_config.services.get("TVNZ") or {})
+        merged = self._deep_merge(packaged_config, user_config)
 
-            # for development only
-            """console.print_json(data=parsed_data)
-            f = open("cat_tvnz.json",'w')
-            f.write(json.dumps(parsed_data))
-            f.close()"""
+        if not merged:
+            raise RuntimeError(
+                "No envied TVNZ service config found. Check envied.yaml and "
+                "packages/envied/src/envied/services/TVNZ/config.yaml."
+            )
 
-            i = 1
-            beaupylist = []
-            linkList = []
+        return merged
 
-            for item_key, item in parsed_data["_embedded"].items():
-                try:
-                    if item.get("type") == "category":
-                        continue
-                    elif item.get("type") == "showVideo":
-                        myurl = "https://www.tvnz.co.nz" + item.get("page", {}).get(
-                            "url", ""
-                        )
-                        showType = item.get("showType", "unknown")
-                    elif item.get("type") == "show":
-                        showType = item.get("showType", "unknown")
-                        myurl = "https://www.tvnz.co.nz" + item.get(
-                            "watchAction", {}
-                        ).get("link", "")
-                    elif item.get("type") == "sportVideo":
-                        showType = item.get("showType", "unknown")
-                        myurl = "https://www.tvnz.co.nz" + item.get("page", {}).get(
-                            "url", ""
-                        )
-                    title = item.get("title", "Unknown Title")
-                    # we are adding an episode to the series data using title as series name
-                    # There will be some episodes with the same series name.
-                    # in the context of category browsing TVNZ allows duplicates.
-                    # Below we only take the fist item with a series name
-                    # and add that to our beaupylist for display. Thus duplicates are not added.
-                    episode = {
-                        "index": i,
-                        "title": item.get("title", "Unknown Title"),
-                        "synopsis": item.get("synopsis", "No synopsis available"),
-                    }
-                    self.add_episode(title, episode)
-                    # linked list allows keeping the url away from beaupy list
-                    # we pull the url from selected by referencing the index  in linkList
-                    linkList.append([myurl, showType])
-                    i += 1
-                except Exception:
-                    continue
+    @classmethod
+    def _load_envied_proxy_providers(cls, no_proxy: bool) -> list[Any]:
+        if no_proxy:
+            return []
+
+        providers: list[Any] = []
+        proxy_cfg = envied_config.proxy_providers or {}
+
+        try:
+            if proxy_cfg.get("basic"):
+                providers.append(Basic(**proxy_cfg["basic"]))
+            if proxy_cfg.get("nordvpn"):
+                providers.append(NordVPN(**proxy_cfg["nordvpn"]))
+            if proxy_cfg.get("surfsharkvpn"):
+                providers.append(SurfsharkVPN(**proxy_cfg["surfsharkvpn"]))
+            if proxy_cfg.get("windscribevpn"):
+                providers.append(WindscribeVPN(**proxy_cfg["windscribevpn"]))
+            if proxy_cfg.get("gluetun"):
+                providers.append(Gluetun(**proxy_cfg["gluetun"]))
+            if binaries.HolaProxy:
+                providers.append(Hola())
         except Exception as e:
-            print(f"Error fetching category data: {e}")
-            return
+            print(f"Could not load envied proxy providers for TVNZ metadata lookup: {e}")
+
+        return providers
+
+    # ---------------------------------------------------------------------
+    # Download command construction
+    # ---------------------------------------------------------------------
+
+    def _download_url(self, url: str):
+        url = self._normalise_tvnz_url(url)
+        command = ["uv", "run", "envied", "dl", *self.options_list, "TVNZ", url]
+        self.runsubprocess(command)
+        return None
+
+    # ---------------------------------------------------------------------
+    # Small helpers
+    # ---------------------------------------------------------------------
+
+    def _normalised_options(self) -> list[str]:
+        try:
+            return [x for x in split_options(TvnzLoader.options or "") if x]
+        except Exception:
+            return []
+
+    def _option_value(self, long_name: str, short_name: str | None = None) -> str | None:
+        names = {long_name}
+        if short_name:
+            names.add(short_name)
+
+        for i, token in enumerate(self.options_list):
+            if token in names and i + 1 < len(self.options_list):
+                return self.options_list[i + 1]
+            if token.startswith(f"{long_name}="):
+                return token.split("=", 1)[1]
+
+        return None
+
+    def _has_option(self, name: str) -> bool:
+        return name in self.options_list
+
+    @staticmethod
+    def _looks_like_url(value: str) -> bool:
+        return value.startswith("http://") or value.startswith("https://")
+
+    @staticmethod
+    def _normalise_tvnz_url(url: str) -> str:
+        # Envied's TITLE_RE accepts tvnz.co.nz and www.tvnz.co.nz.  Keep this
+        # mainly to remove accidental whitespace and make search-created URLs
+        # consistent.
+        return url.strip().replace("https://www.tvnz.co.nz/", "https://tvnz.co.nz/")
+
+    def _selected_to_url(self, selected: str) -> str | None:
+        if self._looks_like_url(selected):
+            return selected
 
         data = self.get_series_data()
-        # unique to TVNZ
-        # get first item in each list to create a beaupylist
-        # without duplicates
-        for key, items in data.items():
-            if items:  # Check if the list is not empty
-                first_item = items[
-                    0
-                ]  # Get the first dictionary, any more may be duplicates
-                index = first_item["index"]
-                title = first_item["title"]
-                synopsis = first_item["synopsis"]
-                beaupylist.append([index, title, synopsis])
+        rows = data.get(selected) or []
+        if not rows:
+            return None
 
-        found = self.list_display_beaupylist(beaupylist)
-        self.clear_series_data()
-        if found:
-            ind = found[0]
-            url, showType = linkList[int(ind) - 1]
-            if showType == "Movie" or showType == "NonEpisodic":
-                # direct download
-                return self.receive(inx=1, search_term=url)
+        return rows[0].get("url")
+
+    @staticmethod
+    def _title_to_url(title: Any, fallback: str) -> str:
+        data = getattr(title, "data", None) or {}
+
+        content_type = data.get("cty")
+        content_id = data.get("nu") or getattr(title, "id", None)
+
+        if content_type and content_id:
+            return f"https://tvnz.co.nz/{content_type}/{content_id}"
+
+        # Defensive fallbacks for possible future TVNZ shapes.
+        for key in ("url", "href", "path"):
+            value = data.get(key)
+            if isinstance(value, str) and value:
+                if value.startswith("http"):
+                    return value
+                return f"https://tvnz.co.nz{value if value.startswith('/') else '/' + value}"
+
+        page = data.get("page")
+        if isinstance(page, dict):
+            value = page.get("url")
+            if isinstance(value, str) and value:
+                if value.startswith("http"):
+                    return value
+                return f"https://tvnz.co.nz{value if value.startswith('/') else '/' + value}"
+
+        return fallback
+
+    @staticmethod
+    def _season_episode_label(episode: Any) -> str:
+        season = getattr(episode, "season", 0)
+        number = getattr(episode, "number", 0)
+
+        try:
+            return f"S{int(season):02}E{int(number):02}"
+        except Exception:
+            return f"S{season}E{number}"
+
+    @classmethod
+    def _synopsis(cls, data: Any) -> str:
+        if not isinstance(data, dict):
+            return "No synopsis available."
+
+        # TVNZ catalogue values are often localised lists like:
+        # [{"n": "Some text"}]
+        for key in ("losd", "sd", "synopsis", "description"):
+            value = data.get(key)
+            text = cls._first_localised_text(value)
+            if text:
+                return text
+
+        return "No synopsis available."
+
+    @staticmethod
+    def _first_localised_text(value: Any) -> str | None:
+        if isinstance(value, str):
+            return value
+
+        if isinstance(value, list) and value:
+            first = value[0]
+            if isinstance(first, dict):
+                text = first.get("n")
+                if isinstance(text, str):
+                    return text
+            if isinstance(first, str):
+                return first
+
+        if isinstance(value, dict):
+            text = value.get("n")
+            if isinstance(text, str):
+                return text
+
+        return None
+
+    @staticmethod
+    def _search_term_from_url(url: str) -> str:
+        path = urlparse(url).path.strip("/")
+        if not path:
+            return ""
+
+        # Usually the last useful slug is the most specific category/title text.
+        slug = path.split("/")[-1]
+        return slug.replace("-", " ").replace("_", " ").strip()
+
+    @classmethod
+    def _deep_merge(cls, defaults: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+        result = copy.deepcopy(defaults or {})
+
+        for key, value in (overrides or {}).items():
+            if isinstance(value, dict) and isinstance(result.get(key), dict):
+                result[key] = cls._deep_merge(result[key], value)
             else:
-                # greedy search
-                search_term = url.split("/")[4].replace("-", " ")
-                return self.receive(inx=3, search_term=search_term)
-        else:
-            print("No video selected.")
-            return
-        
+                result[key] = copy.deepcopy(value)
 
+        return result
