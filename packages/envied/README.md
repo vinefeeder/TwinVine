@@ -46,7 +46,7 @@ uv run envied dl SERVICE_NAME CONTENT_ID
 
 For comprehensive setup guides, configuration options, and advanced usage:
 
-📖 **[Visit their WIKI](https://github.com/unshackle-dl/unshckle/wiki)**
+📖 **[Visit their WIKI](https://github.com/unshackle-dl/unshackle/wiki)**
 
 The WIKI contains detailed information on:
 
@@ -54,7 +54,7 @@ The WIKI contains detailed information on:
 - DRM configuration
 - Advanced features and troubleshooting
 
-For guidance on creating services, see their [WIKI documentation](https://github.com/ushackle-dl/ushackle/wiki).
+For guidance on creating services, see their [WIKI documentation](https://github.com/unshackle-dl/unshackle/wiki).
 
 ## End User License Agreement
 
