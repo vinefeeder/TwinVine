@@ -262,8 +262,28 @@ So with that you may write your own vinefeeder service and place the folder in p
 
 **Servies Note**
 Some services may be found in an options folder (packages/envied/src/envied/options/).  They may have constraints on the python version they run under. Only copy a  service into the packages/envied/src/envied/services folder if the version matches yours.
+
+**Linux users only: Adding a little automation**
+in .bashrc in your home directory you can add useful aliases and scripts to speed the start-up of TwinVine.
+
+Add the following lines at the end of your .bashrc, (or your system's equivalent), to start Vinefeeder by typing 'v' into a terminal window;  
+and 'e' to start envied with a pre-filled command.  BE SURE TO EDIT your/path/to/Twinvine to reflect your needs.
+```
+alias v="cd /your/path/to/TwinVine/;uv run vinefeeder"
+
+unalias e 2>/dev/null  
+
+e() {
+    cd /your/path/to/TwinVine || return
+
+    local cmd
+    read -e -i "uv run envied dl --select-titles " -p "TwinVine> " cmd || return
+
+    [[ -n "$cmd" ]] && history -s "$cmd" && eval "$cmd"
+}
+```
   
-**Other README's""
+**Other README's**
     TwinVine/packages/vinefeeder/src/vinefeeder/README.md  
     for details for confuring Envied download options on a service by service basis.
     TwinVine/packages/envied/README.md  links to wiki (envied - envied's parent)
