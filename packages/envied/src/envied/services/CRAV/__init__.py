@@ -7,13 +7,13 @@ from http.cookiejar import CookieJar
 from typing import Any
 
 import click
-from envied.core.credential import Credential
-from envied.core.manifests import DASH
-from envied.core.service import Service
-from envied.core.session import session
-from envied.core.titles import Episode, Movie, Movies, Series
-from envied.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks
-from envied.core.cdm.detect import is_playready_cdm
+from unshackle.core.credential import Credential
+from unshackle.core.manifests import DASH
+from unshackle.core.service import Service
+from unshackle.core.session import session
+from unshackle.core.titles import Episode, Movie, Movies, Series
+from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks
+from unshackle.core.cdm.detect import is_playready_cdm
 
 
 class CRAV(Service):
@@ -21,7 +21,7 @@ class CRAV(Service):
     Service code for Bell Media's Crave streaming service (https://crave.ca).
 
     \b
-    Version: 1.0.1
+    Version: 1.0.2
     Author: stabbedbybrick
     Authorization: Credentials
     Geofence: CA (API and downloads)
@@ -70,7 +70,7 @@ class CRAV(Service):
             self.user_profile = "default"
 
     def get_session(self) -> session:
-        return session()
+        return session("OkHttp4_12", status_forcelist=[429, 502, 503, 504])
 
     def authenticate(self, cookies: CookieJar | None = None, credential: Credential | None = None) -> None:
         if not credential:
@@ -424,8 +424,8 @@ class CRAV(Service):
                 service=self.__class__,
                 title=episode.get("media", {}).get("title"),
                 year=episode.get("media", {}).get("productionYear"),
-                season=int(episode.get("seasonNumber", 0)),
-                number=int(episode.get("episodeNumber", 0)),
+                season=int(episode.get("seasonNumber") or 0),
+                number=int(episode.get("episodeNumber") or 0),
                 name=episode.get("title"),
                 language=original_language,
                 data=episode,
@@ -535,8 +535,8 @@ class CRAV(Service):
                 service=self.__class__,
                 title=content.get("media", {}).get("title"),
                 year=content.get("media", {}).get("productionYear"),
-                season=int(content.get("seasonNumber", 0)),
-                number=int(content.get("episodeNumber", 0)),
+                season=int(content.get("seasonNumber") or 0),
+                number=int(content.get("episodeNumber") or 0),
                 name=content.get("title"),
                 language=original_language,
                 data=content,

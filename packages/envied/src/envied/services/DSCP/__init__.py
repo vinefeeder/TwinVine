@@ -20,7 +20,7 @@ from envied.core.credential import Credential
 from envied.core.manifests import DASH
 from envied.core.search_result import SearchResult
 from envied.core.service import Service
-from envied.core.session import session as CurlSession
+from envied.core.session import session
 from envied.core.titles import Episode, Movie, Movies, Series
 from envied.core.tracks import Audio, Chapter, Chapters, Subtitle, Track, Tracks
 from envied.core.utilities import is_close_match
@@ -33,7 +33,7 @@ class DSCP(Service):
     Credit to @sp4rk.y for the subtitle fix.
 
     \b
-    Version: 1.0.3
+    Version: 1.0.4
     Author: stabbedbybrick
     Authorization: Cookies for subscription, none for freely available titles
     Robustness:
@@ -96,8 +96,8 @@ class DSCP(Service):
 
         self.base_url = self.config["endpoints"]["default_url"]
 
-    def get_session(self) -> CurlSession:
-        return CurlSession("okhttp4", status_forcelist=[429, 502, 503, 504])
+    def get_session(self) -> session:
+        return session("OkHttp4_12", status_forcelist=[429, 502, 503, 504])
 
     def authenticate(self, cookies: CookieJar | None = None, credential: Credential | None = None) -> None:
         super().authenticate(cookies, credential)
