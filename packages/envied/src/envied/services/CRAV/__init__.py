@@ -7,13 +7,13 @@ from http.cookiejar import CookieJar
 from typing import Any
 
 import click
-from unshackle.core.credential import Credential
-from unshackle.core.manifests import DASH
-from unshackle.core.service import Service
-from unshackle.core.session import session
-from unshackle.core.titles import Episode, Movie, Movies, Series
-from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks
-from unshackle.core.cdm.detect import is_playready_cdm
+from envied.core.credential import Credential
+from envied.core.manifests import DASH
+from envied.core.service import Service
+from envied.core.session import session
+from envied.core.titles import Episode, Movie, Movies, Series
+from envied.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks
+from envied.core.cdm.detect import is_playready_cdm
 
 
 class CRAV(Service):
