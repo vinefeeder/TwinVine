@@ -116,12 +116,10 @@ class TPTV(Service):
         cache = self.cache.get(f"tokens_{credential.sha1}")
         # first contact
         fc_headers = {
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/151.0',
             'Accept': '*/*',
             'Accept-Language': 'en-GB,en;q=0.5',
             'api-key': 'zq5pyPd0RTbNg3Fyj52PrkKL9c2Af38HHh4itgZTKDaCzjAyhd',
-            'Referer': 'https://tptvencore.co.uk/',
-            'tenant': 'encore',
             'Content-Type': 'application/json',
             'Origin': 'https://tptvencore.co.uk',
             'DNT': '1',
@@ -132,13 +130,15 @@ class TPTV(Service):
             'Priority': 'u=0',
 
             }
-        payload = {}
-        r = self.session.post(self.config["endpoints"]["session"], headers=fc_headers, json=payload)
+ 
+        
+        r = self.session.get(self.config["endpoints"]["initial"], headers=fc_headers)
         if r.status_code != 200:
             raise ConnectionError   
         else:
-            session_id = r.json()['id']
-            self.session.headers.update({'session': session_id})
+            headers = r.headers
+            self.session.headers.update({'session': headers.get('session')})
+            
         
         # login
         if cache and not cache.expired:

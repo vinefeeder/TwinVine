@@ -48,11 +48,13 @@ class TptvLoader(BaseLoader):
             }
         super().__init__(headers)
         payload = {}
-        r = self.post_data("https://prod.suggestedtv.com/api/client/v1/session", json=payload, headers=headers)
+        r = self.client.get("https://tptvencore.co.uk/", headers=headers)
         if r.status_code != 200:
             raise ConnectionError   
         else:
-            self.session_id = r.json()['id']
+            #headers = r.headers
+            #self.client.headers.update({'headers': headers.get('headers')})
+            pass
       
 
     def receive(
@@ -153,9 +155,7 @@ class TptvLoader(BaseLoader):
 
         get_headers = suggested_headers.copy()
         get_headers['Access-Control-Request-Headers'] = 'session,tenant'
-        get_headers['Access-Control-Request-Method'] = 'GET'   
-        get_headers['session'] = self.session_id
-        #get_headers['tenant'] = 'encore'                                                                         
+        get_headers['Access-Control-Request-Method'] = 'GET'                                                                           
         response = self.get_data(suggested_url, headers=get_headers)
         myjson = json.loads(response)
         

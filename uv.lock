@@ -774,7 +774,7 @@ requires-dist = [
     { name = "langcodes", specifier = ">=3.4.0,<4" },
     { name = "language-data", specifier = ">=1.4.0" },
     { name = "lxml", specifier = ">=5.2.1,<7" },
-    { name = "mypy", specifier = ">=1.19.1,<2" },
+    { name = "mypy", specifier = ">=1.19.1,<=2.1.0" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
     { name = "pycaption", specifier = ">=2.2.6,<3" },
     { name = "pycountry", specifier = ">=24.6.1" },
