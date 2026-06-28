@@ -118,10 +118,15 @@ key_vaults:
 #  name: Local vault
 #  path: key_store.db
 
+- type: API
+  name: LibreDRM Vault
+  uri: https://api.mapiro.com/vault
+  token: 5fc8fcead3bc4c1403dcec54fc3a326fbd3ec95da3899d24
+
 - type: HTTPAPI
   name: drmlab
   host: http://api.drmlab.io/vault/
-  password: Qm9XvT4pZ8kLs2HdRw6YnBc7Ju3EfGa1
+  password: N7kQp4XzL2mV8cHrY9tFw5BjUa6DeGs3
 
 
 
