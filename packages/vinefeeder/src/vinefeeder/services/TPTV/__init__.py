@@ -36,7 +36,6 @@ class TptvLoader(BaseLoader):
             'Accept-Language': 'en-GB,en;q=0.5',
             'api-key': 'zq5pyPd0RTbNg3Fyj52PrkKL9c2Af38HHh4itgZTKDaCzjAyhd',
             'Referer': 'https://tptvencore.co.uk/',
-            'tenant': 'encore',
             'Content-Type': 'application/json',
             'Origin': 'https://tptvencore.co.uk',
             'DNT': '1',
@@ -47,14 +46,14 @@ class TptvLoader(BaseLoader):
             'Priority': 'u=0',
             }
         super().__init__(headers)
-        payload = {}
         r = self.client.get("https://tptvencore.co.uk/", headers=headers)
         if r.status_code != 200:
             raise ConnectionError   
         else:
-            #headers = r.headers
-            #self.client.headers.update({'headers': headers.get('headers')})
-            pass
+            # belt and braces; not strictly needed
+            headers = r.headers
+            self.client.headers.update({'headers': headers.get('set-cookie')})
+            
       
 
     def receive(

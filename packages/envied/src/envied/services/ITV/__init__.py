@@ -73,7 +73,8 @@ class ITV(Service):
 
         self.cdm = ctx.obj.cdm
         self.drm_system = "playready" if is_playready_cdm(self.cdm) else "widevine"
-        self.security_level = f"SL{self.cdm.security_level}" if self.drm_system == "playready" else f"L{self.cdm.security_level}"
+        if self.cdm != None:
+            self.security_level = f"SL{self.cdm.security_level}" if self.drm_system == "playready" else f"L{self.cdm.security_level}"
 
         self.session.headers.update(self.config["headers"])
 

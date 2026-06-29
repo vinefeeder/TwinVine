@@ -9,6 +9,8 @@ TwinVine combines two Python packages:
 
 TwinVine helps you find, select, and download media. Use the graphical front end when you want search and selection assistance, and use the command-line downloader for exact URLs.
 
+Envied is forked from unshackle github.com/unshackle-dl/unshackle and I thank the developers for thier effort.
+
 ## Key workflows
 
 - Use `envied` when you already have an exact program URL.
