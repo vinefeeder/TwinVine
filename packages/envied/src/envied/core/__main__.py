@@ -23,7 +23,7 @@ from envied.core.utilities import close_debug_logger, init_debug_logger
 @click.option("-v", "--version", is_flag=True, default=False, help="Print version information.")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Enable DEBUG level logs and JSON debug logging.")
 def main(version: bool, debug: bool) -> None:
-    """unshackle—Modular Movie, TV, and Music Archival Software."""
+    """envied.Modular Movie, TV, and Music Archival Software."""
     debug_logging_enabled = debug or config.debug
 
     logging.basicConfig(
@@ -57,7 +57,7 @@ def main(version: bool, debug: bool) -> None:
                 r"░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n" ,
                     style="ascii.art",
                 ),
-                Text("    and more than unshackled...", style = "ascii.art"),
+                Text("    and more than envied....", style = "ascii.art"),
                 f"\nv [repr.number]{__version__}[/] - https://github.com/vinefeeder/envied",
             ),
             (1, 11, 1, 10),
@@ -66,6 +66,7 @@ def main(version: bool, debug: bool) -> None:
         justify="center",
         )
 
+    
 
 
 @atexit.register

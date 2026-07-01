@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## 5.3.0 01-07-2026
+
+Repository: unshackle-dl/unshackle · Tag: 5.3.0 · Commit: d4a5826 · Released by: imSp4rky
+Features
+
+    --merge-video: merge video language variants into one MKV per (resolution, range, codec) group
+    Native ExpressVPN HTTPS proxy provider (full OAuth PKCE flow, no external tools)
+    Proton VPN proxy provider with country/city/server-number selection, plus ProtonVPN TV-code login
+    Load service plugins from git repos (clone + TTL-pull cache, refresh-services command, dirty-clone guard)
+    Python 3.14 support (supported range widened to 3.11-3.14)
+    Automatic Firefox cookie and localStorage extraction
+    Nested directories in folder templates (/ treated as path separator)
+    air_date for date-based episode naming (daily/sports content named by date instead of SxxExx)
+    Per-vault network timeout for remote API/HTTP vaults
+    Richer API job progress: active-track segment counts, transfer speed, title description/date/cover_url
+
+Bug Fixes
+
+    drm: don't switch to a mismatched CDM type during licensing; raise a clear error instead
+    config: match per-service cdm keys case-insensitively
+    dl: apply per-service decryption tool override before decrypt
+    hls: stream segment merges to avoid OOM on large (multi-GB) tracks
+    console: pause active live/spinner contexts during terminal input so prompts stay visible
+    output: treat both / and \ as folder separators on any OS
+    env: only resolve Path items in directory lists (git repo specs pass through)
+
+Performance & Changes
+
+    perf(hls): rename single decrypted range instead of re-copying a full track
+    perf(tracks): skip redundant DV/VUI bitstream passes when VUI already matches range
+    api: collapse route registration, dedup handlers, remove dead serve/remote code paths
+
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 

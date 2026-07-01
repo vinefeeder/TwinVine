@@ -6,7 +6,7 @@ endpoints:
 
 headers:
   Accept: application/json
-  User-Agent: okhttp/5.1.0
+  User-Agent: okhttp/5..0
 
 client:
   apikey: 592c205299de839aa3948643addfe0bc

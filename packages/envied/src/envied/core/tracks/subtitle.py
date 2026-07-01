@@ -861,20 +861,13 @@ class Subtitle(Track):
                 Subtitle.Codec.SAMI: "sami",
                 Subtitle.Codec.MicroDVD: "microdvd",
             }.get(codec, codec.name.lower())
-            '''sub_edit_args = [
+            sub_edit_args = [
                 str(binaries.SubtitleEdit),
                 "/convert",
                 str(self.path),
                 sub_edit_format,
                 f"/outputfilename:{output_path.name}",
                 "/encoding:utf8",
-            ]'''
-            ## Angela edited this to remove the /convert argument because it was causing issues with SubtitleEdit
-            sub_edit_args = [
-                binaries.SubtitleEdit,
-                self.path, sub_edit_format,
-                f"/outputfilename:{output_path.name}",
-                "/encoding:utf8"
             ]
             if codec == Subtitle.Codec.SubRip:
                 sub_edit_args.append("/ConvertColorsToDialog")

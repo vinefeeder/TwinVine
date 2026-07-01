@@ -12,7 +12,7 @@ from appdirs import AppDirs
 class Config:
     class _Directories:
         # default directories, do not modify here, set via config
-        app_dirs = AppDirs("unshackle", False)
+        app_dirs = AppDirs("envied", False)
         core_dir = Path(__file__).resolve().parent
         namespace_dir = core_dir.parent
         commands = namespace_dir / "commands"
@@ -33,8 +33,8 @@ class Config:
 
     class _Filenames:
         # default filenames, do not modify here, set via config
-        log = "unshackle_{name}_{time}.log"  # Directories.logs
-        debug_log = "unshackle_debug_{service}_{time}.jsonl"  # Directories.logs
+        log = "envied.{name}_{time}.log"  # Directories.logs
+        debug_log = "envied.debug_{service}_{time}.jsonl"  # Directories.logs
         config = "config.yaml"  # Directories.services / tag
         root_config = "envied.yaml"  # Directories.user_configs
         chapters = "Chapters_{title}_{random}.txt"  # Directories.temp
@@ -112,7 +112,7 @@ class Config:
             raise SystemExit(
                 "ERROR: The 'scene_naming' option has been removed.\n"
                 "Please configure 'output_template' in your envied.yaml instead.\n"
-                "See unshackle-example.yaml for examples."
+                "See envied.example.yaml for examples."
             )
 
         if self.output_template:
@@ -231,11 +231,11 @@ class Config:
 
 # noinspection PyProtectedMember
 POSSIBLE_CONFIG_PATHS = (
-    # The unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/unshackle)
+    # The envied.Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/envied.
     Config._Directories.namespace_dir / Config._Filenames.root_config,
-    # The Parent Folder to the unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
+    # The Parent Folder to the envied.Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
     Config._Directories.namespace_dir.parent / Config._Filenames.root_config,
-    # The AppDirs User Config Folder (e.g., ~/.config/unshackle on Linux, %LOCALAPPDATA%\unshackle on Windows)
+    # The AppDirs User Config Folder (e.g., ~/.config/envied.on Linux, %LOCALAPPDATA%\envied.on Windows)
     Path(Config._Directories.app_dirs.user_config_dir) / Config._Filenames.root_config,
 )
 

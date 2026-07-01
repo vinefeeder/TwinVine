@@ -151,7 +151,7 @@ class DecryptLabsRemoteCDM:
             {
                 "decrypt-labs-api-key": self.secret,
                 "Content-Type": "application/json",
-                "User-Agent": f"unshackle-decrypt-labs-cdm/{__version__}",
+                "User-Agent": f"envied.decrypt-labs-cdm/{__version__}",
             }
         )
 

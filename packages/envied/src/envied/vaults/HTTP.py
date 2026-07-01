@@ -57,7 +57,7 @@ class HTTP(Vault):
         self.api_mode = api_mode.lower()
         self.current_title = None
         self.session = Session()
-        self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+        self.session.headers.update({"User-Agent": f"envied.v{__version__}"})
         self.api_session_id = None
 
         if self.api_mode == "decrypt_labs":

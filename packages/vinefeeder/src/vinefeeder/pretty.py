@@ -39,7 +39,7 @@ def pretty_print():
         f"[{catppuccin_mocha['pink']}]░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
         f"[{catppuccin_mocha['pink']}]░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
         f"[{catppuccin_mocha['pink']}]░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n\n"
-        f"[{catppuccin_mocha['pink']}]It's more than unshackled...[/]" + "\n"
+        f"[{catppuccin_mocha['pink']}]It's more than envied....[/]" + "\n"
 
  
 

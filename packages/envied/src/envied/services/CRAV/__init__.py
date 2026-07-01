@@ -42,7 +42,7 @@ class CRAV(Service):
     \b
     Notes:
         - Subtitles are not always consistent, so both external (VTT) and internal (WVTT) subtitles are added.
-            If you experience incomplete subtitles, try using a newer version of Unshackle (v5.0.0+).
+            If you experience incomplete subtitles, try using a newer version of envied.(v5.0.0+).
         - Authentication will look for master profile first, then first profile with adult maturity scope.
         - Account pins are currently not supported.
     """

@@ -81,7 +81,7 @@ class Gluetun(Proxy):
             # Global settings (optional)
             base_port: 8888
             auto_cleanup: true
-            container_prefix: "unshackle-gluetun"
+            container_prefix: "envied.gluetun"
 
     Usage:
         --proxy gluetun:windscribe:us
@@ -166,7 +166,7 @@ class Gluetun(Proxy):
         providers: Optional[dict] = None,
         base_port: int = 8888,
         auto_cleanup: bool = True,
-        container_prefix: str = "unshackle-gluetun",
+        container_prefix: str = "envied.gluetun",
         auth_user: Optional[str] = None,
         auth_password: Optional[str] = None,
         verify_ip: bool = True,
@@ -187,7 +187,7 @@ class Gluetun(Proxy):
                 }
             base_port: Starting port for HTTP proxies (default: 8888)
             auto_cleanup: Automatically remove stopped containers (default: True)
-            container_prefix: Docker container name prefix (default: "unshackle-gluetun")
+            container_prefix: Docker container name prefix (default: "envied.gluetun")
             auth_user: Optional HTTP proxy authentication username
             auth_password: Optional HTTP proxy authentication password
             verify_ip: Automatically verify IP and region after connection (default: True)
@@ -272,7 +272,7 @@ class Gluetun(Proxy):
         debug_logger = get_debug_logger()
 
         # Check if container already exists (in memory OR in Docker)
-        # This handles multiple concurrent Unshackle sessions
+        # This handles multiple concurrent envied.sessions
         if query_key in self.active_containers:
             container = self.active_containers[query_key]
             if self._is_container_running(container["container_name"]):
@@ -778,7 +778,7 @@ class Gluetun(Proxy):
         # Avoid exposing credentials in process listings by using --env-file instead of many "-e KEY=VALUE".
         env_file_path: str | None = None
         try:
-            fd, env_file_path = tempfile.mkstemp(prefix=f"unshackle-{container_name}-", suffix=".env")
+            fd, env_file_path = tempfile.mkstemp(prefix=f"envied.{container_name}-", suffix=".env")
             try:
                 # Best-effort restrictive permissions.
                 if os.name != "nt":
@@ -921,7 +921,7 @@ class Gluetun(Proxy):
         """
         Check if a container exists in Docker and get its info.
 
-        This handles multiple Unshackle sessions - if another session already
+        This handles multiple envied.sessions - if another session already
         created the container, we'll reuse it instead of trying to create a duplicate.
 
         Args:
@@ -955,7 +955,7 @@ class Gluetun(Proxy):
             port = int(port_match.group(1))
 
             # Extract provider and region from container name
-            # Format: unshackle-gluetun-provider-region
+            # Format: envied.gluetun-provider-region
             name_pattern = f"{self.container_prefix}-(.+)-([^-]+)$"
             name_match = re.match(name_pattern, container_name)
             if not name_match:

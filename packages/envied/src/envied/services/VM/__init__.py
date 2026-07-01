@@ -9,11 +9,11 @@ from urllib.parse import urljoin, urlparse
 
 import click
 from requests import Request
-from unshackle.core.manifests import DASH
-from unshackle.core.search_result import SearchResult
-from unshackle.core.service import Service
-from unshackle.core.titles import Episode, Series, Title_T, Titles_T
-from unshackle.core.tracks import Chapters, Tracks
+from envied.core.manifests import DASH
+from envied.core.search_result import SearchResult
+from envied.core.service import Service
+from envied.core.titles import Episode, Series, Title_T, Titles_T
+from envied.core.tracks import Chapters, Tracks
 
 
 class VM(Service):

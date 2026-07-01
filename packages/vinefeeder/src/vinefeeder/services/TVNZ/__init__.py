@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import click
-from unshackle.core import service
+from envied.core import service
 import yaml
 from beaupy import select_multiple
 from rich.console import Console

@@ -219,7 +219,7 @@ class CustomRemoteCDM:
         # HTTP session setup
         self._http_session = Session()
         self._http_session.headers.update(
-            {"Content-Type": "application/json", "User-Agent": f"unshackle-custom-cdm/{__version__}"}
+            {"Content-Type": "application/json", "User-Agent": f"envied.custom-cdm/{__version__}"}
         )
 
         # Apply custom headers from auth config

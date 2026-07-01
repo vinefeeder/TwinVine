@@ -14,7 +14,7 @@ class API(Vault):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.session = Session()
-        self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+        self.session.headers.update({"User-Agent": f"envied.v{__version__}"})
         self.session.headers.update({"Authorization": f"Bearer {token}"})
 
     def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:

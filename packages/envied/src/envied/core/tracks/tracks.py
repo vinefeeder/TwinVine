@@ -339,6 +339,32 @@ class Tracks:
                     merged.append(video)
         return merged
 
+    @staticmethod
+    def partition_hybrid_videos(
+        videos: list[Video], non_hybrid_ranges: list[Video.Range]
+    ) -> tuple[list[Video], list[Video]]:
+        """Split videos into hybrid-ingredient candidates and the standalone-deliverable pool.
+
+        HDR10/HDR10+/DV tracks are hybrid ingredients; they only enter the standalone
+        pool when their range was explicitly requested alongside HYBRID, so e.g.
+        `-r HYBRID` muxes only the hybrid while `-r HYBRID,HDR10P` also delivers HDR10+.
+        """
+        ingredient_ranges = (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
+        hybrid_candidates = [v for v in videos if v.range in ingredient_ranges]
+        non_hybrid = [v for v in videos if v.range not in ingredient_ranges or v.range in non_hybrid_ranges]
+        return hybrid_candidates, non_hybrid
+
+    @staticmethod
+    def flag_hybrid_ingredients(hybrid_selected: list[Video], non_hybrid_selected: list[Video]) -> None:
+        """Mark tracks selected only as hybrid ingredients so the standalone mux loop skips them.
+
+        A track that was also picked as an explicit deliverable (same track in both
+        selections) stays unflagged and is muxed standalone alongside the hybrid.
+        """
+        for video in hybrid_selected:
+            if video not in non_hybrid_selected:
+                video.hybrid_base_only = True
+
     def select_hybrid(self, tracks, quality, worst: bool = False):
         # Prefer HDR10+ over HDR10 as the base layer (preserves dynamic metadata)
         base_ranges = (Video.Range.HDR10P, Video.Range.HDR10)

@@ -1,7 +1,7 @@
 """Remote service adapter for envied.
 
 Implements the Service interface by proxying authenticate, get_titles,
-get_tracks, get_chapters, and license methods to a remote unshackle server.
+get_tracks, get_chapters, and license methods to a remote envied.server.
 Everything else (track selection, download, decrypt, mux) runs locally.
 """
 
@@ -36,7 +36,7 @@ log = logging.getLogger("remote_service")
 
 
 class RemoteClient:
-    """HTTP client for the unshackle serve API."""
+    """HTTP client for the envied.serve API."""
 
     def __init__(self, server_url: str, api_key: str) -> None:
         self.server_url = server_url.rstrip("/")
@@ -49,7 +49,7 @@ class RemoteClient:
             from envied.core import __version__
 
             self._session = requests.Session()
-            self._session.headers["User-Agent"] = f"unshackle/{__version__}"
+            self._session.headers["User-Agent"] = f"envied.{__version__}"
             if self.api_key:
                 self._session.headers["X-Secret-Key"] = self.api_key
         return self._session
@@ -59,7 +59,7 @@ class RemoteClient:
         try:
             resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
         except requests.ConnectionError:
-            log.error(f"Could not connect to remote server at {self.server_url}. Is it running? (unshackle serve)")
+            log.error(f"Could not connect to remote server at {self.server_url}. Is it running? (envied.serve)")
             raise SystemExit(1)
         except requests.Timeout:
             log.error(f"Request to remote server timed out: {endpoint}")
@@ -366,7 +366,7 @@ def _resolve_proxy(proxy_arg: Optional[str]) -> Optional[str]:
 
 
 class RemoteService:
-    """Service adapter that proxies to a remote unshackle server.
+    """Service adapter that proxies to a remote envied.server.
 
     Implements the same interface dl.py's result() expects without
     subclassing Service (avoids proxy/geofence setup in __init__).
