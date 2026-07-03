@@ -1,3 +1,5 @@
+import json
+
 from vinefeeder.base_loader import BaseLoader
 from vinefeeder.parsing_utils import extract_script_with_id_json, parse_json, split_options
 from rich.console import Console
@@ -101,53 +103,21 @@ class StvLoader(BaseLoader):
         return
 
     def fetch_videos(self, search_term):
-        headers = {
-            "Accept": "*/*",
-            "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-            "Connection": "keep-alive",
-            "Origin": "https://player.stv.tv",
-            "Referer": "https://player.stv.tv/",
-            "Host": "search-api.swiftype.com",
-            "Access-Control-Request-Method": "POST",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
-        }
-        url = "https://search-api.swiftype.com/api/v1/public/engines/search.json"
+ 
+        url = f"https://v4.api.stv.tv/v4/discovery/search?query={search_term}&indexUid=programme_index&limit=20&offset=0&facets="
 
-        response = self.get_options(url, headers=headers)
-
-        xdata = response["x-request-id"]
-        headers = {
-            "Accept": "*/*",
-            "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-            "Connection": "keep-alive",
-            "Origin": "https://player.stv.tv",
-            "Referer": "https://player.stv.tv/",
-            "Host": "search-api.swiftype.com",
-            "Access-Control-Request-Method": "POST",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
-            "x-request-id": f"{xdata}",
-        }
-        json = {
-            "engine_key": "S1jgssBHdk8ZtMWngK_y",
-            "per_page": 100,
-            "page": 1,
-            "fetch_fields": {"page": ["title", "body", "resultDescriptionTx", "url"]},
-            "highlight_fields": {"page": {"title": {"size": 100, "fallback": True}}},
-            "search_fields": {"page": ["title^3", "body", "category", "sections"]},
-            "q": search_term,
-            "spelling": "strict",
-        }
-
-        response = self.post_data(url, headers=headers, json=json)
-        parsed_data = response.json()  #
-        mydata = parsed_data["records"]["page"]
+        response = self.get_data(url)
+        parsed_data = json.loads(response)
+        mydata = parsed_data["data"]
 
         for item in mydata:
-            title = item["title"]
+            title = item['attributes']["title"]
+            url  = item['attributes']["permalink"]
+            synopsis = item['attributes']["long_description"]
             episode = {
-                "title": item["title"],
-                "url": item["url"],
-                "synopsis": item["resultDescriptionTx"],
+                "title": title,
+                "url": "https://player.stv.tv/" + url.strip('/'),
+                "synopsis": synopsis,
             }
             self.add_episode(title, episode)
 
@@ -179,13 +149,11 @@ class StvLoader(BaseLoader):
         self.clear_series_data()  # Clear existing series data
 
         '''console.print_json(data=parsed_data) # for debugging
-        f = open("1stv.json",'w')
+        f = open("stv.json",'w')
         f.write(json.dumps(parsed_data))
         f.close()'''
 
-        series_data = parsed_data["props"]["pageProps"]["data"]["programmeHeader"][
-            "name"
-        ]
+        series_data = parsed_data["props"]["pageProps"]["data"]["programmeHeader"]["name"]
         tabs = len(parsed_data["props"]["pageProps"]["data"]["tabs"])
         headers = {
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0',
@@ -224,23 +192,28 @@ class StvLoader(BaseLoader):
                     if "Episode" in series_no:
                         series_no = 100
                     else:
-                        series_no = int(series_no.split(" ")[1])
-                    title = item["title"]
-                    url = f"https://player.stv.tv{item['link']}"  # https://player.stv.tv/episode/4nlk/loose-women
-                    synopsis = item["summary"]
-
-                    episode = {
-                        "series_no": series_no,
-                        "title": title.replace(
-                            ", ", "-"
-                        ),  # data with comma messes up later when selecting url
-                        "url": url,
-                        "synopsis": synopsis,
-                    }
-                    self.add_episode_remove_duplicates(series_data, episode)                    
-
+                        if "-" in series_no:
+                            series_no = int(series_no.split("-")[0])
+                        else:
+                            series_no = int(series_no.split(" ")[1])
+                        old_series_no = series_no
                 except KeyError as e:
                     print(f"Error: {e}")
+                title = item["title"]
+                url = f"https://player.stv.tv{item['link']}"  # https://player.stv.tv/episode/4nlk/loose-women
+                synopsis = item["summary"]
+
+                episode = {
+                    "series_no": series_no,
+                    "title": title.replace(
+                        ", ", "-"
+                    ),  # data with comma messes up later when selecting url
+                    "url": url,
+                    "synopsis": synopsis,
+                }
+                self.add_episode_remove_duplicates(series_data, episode)                    
+
+                
 
         if tabs > 1:
             for index in range(1, tabs):
@@ -271,12 +244,19 @@ class StvLoader(BaseLoader):
                 for item in next_parsed_data["results"]:
                     try:
                         series_no = item["playerSeries"]["name"]
+                        if "Episode" in series_no:
+                            series_no = 100
+                        else:
+                            if "-" in series_no:
+                                series_no = int(series_no.split("-")[0])
+                            else:
+                                series_no = int(series_no.split(" ")[1])
                         title = item["title"]
                         url = item["_permalink"]
                         synopsis = item["summary"]
 
                         episode = {
-                            "series_no": int(series_no.replace("Series ", "")),
+                            "series_no": int(series_no),
                             "title": title,
                             "url": url,  #
                             "synopsis": synopsis,

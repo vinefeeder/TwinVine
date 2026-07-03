@@ -34,7 +34,7 @@ class NINE(Service):
     \b
     Tips:
         - Search by show name:
-          envied.dl NINE "Travel Guides"
+          unshackle dl NINE "Travel Guides"
         - Use complete URLs:
           SERIES: https://www.9now.com.au/travel-guides
           EPISODE: https://www.9now.com.au/travel-guides/season-9/episode-2
@@ -386,40 +386,36 @@ class NINE(Service):
 
     @staticmethod
     def _best_source(sources: list[dict]) -> dict | None:
-        dash_drm = next(
-            (
-                source for source in sources
-                if source.get("type") == "application/dash+xml"
+        dash_drm = NINE._first_source(
+            sources,
+            lambda source: (
+                source.get("type") == "application/dash+xml"
                 and (source.get("key_systems") or {}).get("com.widevine.alpha")
-                and source.get("src")
             ),
-            None,
         )
         if dash_drm:
             return dash_drm
 
-        dash_clear = next(
-            (
-                source for source in sources
-                if source.get("type") == "application/dash+xml" and source.get("src")
-            ),
-            None,
-        )
+        dash_clear = NINE._first_source(sources, lambda source: source.get("type") == "application/dash+xml")
         if dash_clear:
             return dash_clear
 
-        return next(
-            (
-                source for source in sources
-                if source.get("type") == "application/x-mpegURL"
-                and source.get("src", "").startswith("https://")
-            ),
+        return NINE._first_source(sources, lambda source: source.get("type") == "application/x-mpegURL")
+
+    @staticmethod
+    def _first_source(sources: list[dict], predicate: Any) -> dict | None:
+        matches = [source for source in sources if predicate(source) and source.get("src")]
+        return next((source for source in matches if source["src"].startswith("https://")), None) or next(
+            iter(matches),
             None,
         )
 
     @staticmethod
     def _add_subtitles(tracks: Tracks, text_tracks: list[dict]) -> None:
         for text_track in text_tracks:
+            if not NINE._is_caption_track(text_track):
+                continue
+
             source_url = text_track.get("src")
             if not source_url and text_track.get("sources"):
                 source_url = next(
@@ -441,6 +437,19 @@ class NINE(Service):
                     sdh=text_track.get("kind") == "captions",
                 )
             )
+
+    @staticmethod
+    def _is_caption_track(text_track: dict) -> bool:
+        kind = (text_track.get("kind") or "").lower()
+        label = (text_track.get("label") or "").lower()
+        source_url = (text_track.get("src") or "").lower()
+
+        if kind in ("metadata", "thumbnail", "thumbnails") or label in ("thumbnail", "thumbnails"):
+            return False
+        if "/thumbnail/" in source_url or "thumbnail.webvtt" in source_url:
+            return False
+
+        return kind in ("captions", "subtitles") or bool(text_track.get("srclang"))
 
     @staticmethod
     def _subtitle_codec(text_track: dict, source_url: str) -> str:
