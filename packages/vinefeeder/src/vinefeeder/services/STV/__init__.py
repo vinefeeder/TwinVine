@@ -103,6 +103,10 @@ class StvLoader(BaseLoader):
         return
 
     def fetch_videos(self, search_term):
+        if 'https' in search_term:
+            search_term = search_term.split("/")[-1]
+            if "?" in search_term:
+                search_term = search_term.split("?")[0].replace("-", " ")
  
         url = f"https://v4.api.stv.tv/v4/discovery/search?query={search_term}&indexUid=programme_index&limit=20&offset=0&facets="
 
