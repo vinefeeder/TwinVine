@@ -67,6 +67,9 @@ dependencies = [
     "animeapi-py>=0.6.0",
     "rnet>=2.4.2",
     "bandit>=1.9.4",
+    "defusedxml>=0.7.1",
+    "jsonpath-ng>=1.8.0",
+    "mutagen>=1.47.0",
     # envied specific dependencies
     "webvtt-py>=0.5.1,<0.6",
     "isodate>=0.7.2,<0.8",
@@ -126,4 +129,5 @@ no_implicit_optional = true
 
 [tool.uv.sources]
 #subby = { git = "https://github.com/vevv/subby.git" }
-subby = { git = "https://github.com/vevv/subby.git", rev = "5a925c367ffb3f5e53fd114ae222d3be1fdff35d" }
+subby = { git = "https://github.com/vevv/subby.git", rev = "a057280f31acd3a0ba5c6dc69eaefbb88aea974e" }
+

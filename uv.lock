@@ -704,14 +704,17 @@ dependencies = [
     { name = "construct" },
     { name = "crccheck" },
     { name = "cryptography" },
+    { name = "defusedxml" },
     { name = "filelock" },
     { name = "fonttools" },
     { name = "httpx" },
     { name = "isodate" },
+    { name = "jsonpath-ng" },
     { name = "jsonpickle" },
     { name = "langcodes" },
     { name = "language-data" },
     { name = "lxml" },
+    { name = "mutagen" },
     { name = "mypy" },
     { name = "protobuf" },
     { name = "pycaption" },
@@ -766,14 +769,17 @@ requires-dist = [
     { name = "construct", specifier = ">=2.8.8,<3" },
     { name = "crccheck", specifier = ">=1.3.0,<2" },
     { name = "cryptography", specifier = ">=45.0.0,<47" },
+    { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "filelock", specifier = ">=3.20.3,<4" },
     { name = "fonttools", specifier = ">=4.60.2,<5" },
     { name = "httpx", specifier = ">=0.28.0,<0.35" },
     { name = "isodate", specifier = ">=0.7.2,<0.8" },
+    { name = "jsonpath-ng", specifier = ">=1.8.0" },
     { name = "jsonpickle", specifier = ">=3.0.4,<5" },
     { name = "langcodes", specifier = ">=3.4.0,<4" },
     { name = "language-data", specifier = ">=1.4.0" },
     { name = "lxml", specifier = ">=5.2.1,<7" },
+    { name = "mutagen", specifier = ">=1.47.0" },
     { name = "mypy", specifier = ">=1.19.1,<=2.1.0" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
     { name = "pycaption", specifier = ">=2.2.6,<3" },
@@ -795,7 +801,7 @@ requires-dist = [
     { name = "ruamel-yaml", specifier = ">=0.18.6,<0.19" },
     { name = "scrapy", specifier = ">=2.14.0,<3" },
     { name = "sortedcontainers", specifier = ">=2.4.0,<3" },
-    { name = "subby", git = "https://github.com/vevv/subby.git?rev=5a925c367ffb3f5e53fd114ae222d3be1fdff35d" },
+    { name = "subby", git = "https://github.com/vevv/subby.git?rev=a057280f31acd3a0ba5c6dc69eaefbb88aea974e" },
     { name = "subtitle-filter", specifier = ">=1.4.9,<2" },
     { name = "unidecode", specifier = ">=1.3.8,<2" },
     { name = "urllib3", specifier = ">=2.6.3,<3" },
@@ -997,6 +1003,18 @@ wheels = [
 ]
 
 [[package]]
+name = "ftfy"
+version = "6.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "wcwidth" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/d3/8650919bc3c7c6e90ee3fa7fd618bf373cbbe55dff043bd67353dbb20cd8/ftfy-6.3.1.tar.gz", hash = "sha256:9b3c3d90f84fb267fe64d375a07b7f8912d817cf86009ae134aa03e1819506ec", size = 308927, upload-time = "2024-10-26T00:50:35.149Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/6e/81d47999aebc1b155f81eca4477a616a70f238a2549848c38983f3c22a82/ftfy-6.3.1-py3-none-any.whl", hash = "sha256:7c70eb532015cd2f9adb53f101fb6c7945988d023a085d127d1573dc49dd0083", size = 44821, upload-time = "2024-10-26T00:50:33.425Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1142,6 +1160,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/00/2a/e867e8531cf3e36b41201936b7fa7ba7b5702dbef42922193f05c8976cd6/jmespath-1.0.1.tar.gz", hash = "sha256:90261b206d6defd58fdd5e85f478bf633a2901798906be2ad389150c5c60edbe", size = 25843, upload-time = "2022-06-17T18:00:12.224Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/31/b4/b9b800c45527aadd64d5b442f9b932b00648617eb5d63d2c7a6587b7cafc/jmespath-1.0.1-py3-none-any.whl", hash = "sha256:02e2e4cc71b5bcab88332eebf907519190dd9e6e82107fa7f83b1003a6252980", size = 20256, upload-time = "2022-06-17T18:00:10.251Z" },
+]
+
+[[package]]
+name = "jsonpath-ng"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/58/250751940d75c8019659e15482d548a4aa3b6ce122c515102a4bfdac50e3/jsonpath_ng-1.8.0.tar.gz", hash = "sha256:54252968134b5e549ea5b872f1df1168bd7defe1a52fed5a358c194e1943ddc3", size = 74513, upload-time = "2026-02-24T14:42:06.182Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/03/99/33c7d78a3fb70d545fd5411ac67a651c81602cc09c9cf0df383733f068c5/jsonpath_ng-1.8.0-py3-none-any.whl", hash = "sha256:b8dde192f8af58d646fc031fac9c99fe4d00326afc4148f1f043c601a8cfe138", size = 67844, upload-time = "2026-02-28T00:53:19.637Z" },
 ]
 
 [[package]]
@@ -1562,6 +1589,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b2/0a/2436550b1520091af0600dff547913cb2d66fbac27a8c33bc1b1bccd8d98/multidict-6.6.4-cp313-cp313t-win_amd64.whl", hash = "sha256:6d46a180acdf6e87cc41dc15d8f5c2986e1e8739dc25dbb7dac826731ef381a4", size = 53100, upload-time = "2025-08-11T12:08:13.823Z" },
     { url = "https://files.pythonhosted.org/packages/97/ea/43ac51faff934086db9c072a94d327d71b7d8b40cd5dcb47311330929ef0/multidict-6.6.4-cp313-cp313t-win_arm64.whl", hash = "sha256:756989334015e3335d087a27331659820d53ba432befdef6a718398b0a8493ad", size = 45501, upload-time = "2025-08-11T12:08:15.173Z" },
     { url = "https://files.pythonhosted.org/packages/fd/69/b547032297c7e63ba2af494edba695d781af8a0c6e89e4d06cf848b21d80/multidict-6.6.4-py3-none-any.whl", hash = "sha256:27d8f8e125c07cb954e54d75d04905a9bba8a439c1d84aca94949d4d03d8601c", size = 12313, upload-time = "2025-08-11T12:08:46.891Z" },
+]
+
+[[package]]
+name = "mutagen"
+version = "1.48.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/df/70/1675da133ea92227da41bf5b24e1c66be597ff736a1533ade41da986852f/mutagen-1.48.1.tar.gz", hash = "sha256:8f95637ab9f6f305cec6bd1294e197debe207998e3e068596563c74f86b0a173", size = 1276978, upload-time = "2026-06-25T09:47:32.443Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/d8/a29e4e3991765e7ce4ed1f7e4074fe1ba9da03e0048639734de60f9cadb9/mutagen-1.48.1-py3-none-any.whl", hash = "sha256:4f077fe87d3fc7fba259aa63d8c026b18382ca6a42ef37c61e16f1b1b5b82fe7", size = 195706, upload-time = "2026-06-25T09:47:30.296Z" },
 ]
 
 [[package]]
@@ -2617,11 +2653,12 @@ wheels = [
 
 [[package]]
 name = "subby"
-version = "0.3.23"
-source = { git = "https://github.com/vevv/subby.git?rev=5a925c367ffb3f5e53fd114ae222d3be1fdff35d#5a925c367ffb3f5e53fd114ae222d3be1fdff35d" }
+version = "0.3.30"
+source = { git = "https://github.com/vevv/subby.git?rev=a057280f31acd3a0ba5c6dc69eaefbb88aea974e#a057280f31acd3a0ba5c6dc69eaefbb88aea974e" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "click" },
+    { name = "ftfy" },
     { name = "langcodes" },
     { name = "lxml" },
     { name = "pymp4" },
@@ -2845,6 +2882,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/09/4608b65fa35ce5fc1479e138293a1166b4ea817cfa9a79f019ab6d7013d8/wasmtime-41.0.0-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:d9627dfc5625b4947ea35c819561da358838fe76f65bda8ffe01ce34df8b32b1", size = 7754016, upload-time = "2026-01-20T18:17:55.346Z" },
     { url = "https://files.pythonhosted.org/packages/f4/9d/236bb367270579e4f628fb7b04fe93541151df7953006f3766607fc667c9/wasmtime-41.0.0-py3-none-win_amd64.whl", hash = "sha256:4f29171d73b71f232b6fe86cba77526fee84139f1590071af5facba401b0c9eb", size = 6325764, upload-time = "2026-01-20T18:17:57.034Z" },
     { url = "https://files.pythonhosted.org/packages/4a/4a/bba9c0368c377250ab24fd005a7a1e9076121778c1e83b1bcc092ab84f86/wasmtime-41.0.0-py3-none-win_arm64.whl", hash = "sha256:0c4bcaba055e78fc161f497b85f39f1d35d475f0341b1e0259fa0a4b49e223e8", size = 5392238, upload-time = "2026-01-20T18:17:59.052Z" },
+]
+
+[[package]]
+name = "wcwidth"
+version = "0.8.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/74/c6428f875774288bec1396f5bfcbc2d925700a4dad61727fd5f2b12f249d/wcwidth-0.8.2.tar.gz", hash = "sha256:91fbef97204b96a3d4d421609b80340b760cf33e26da123ff243d76b1fda8dda", size = 1466253, upload-time = "2026-06-29T18:11:11.601Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/42/3e5985a0a7e57de470b320c6d6a1a67c844f6737a587f3d44dd13d1819e7/wcwidth-0.8.2-py3-none-any.whl", hash = "sha256:d63947694a0539a1d51e01eda7caf800c291020e6cdd7e28ad7b14dd33ad4f85", size = 323166, upload-time = "2026-06-29T18:11:09.888Z" },
 ]
 
 [[package]]
