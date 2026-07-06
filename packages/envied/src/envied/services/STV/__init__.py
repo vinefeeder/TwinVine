@@ -14,6 +14,7 @@ from envied.core.search_result import SearchResult
 from envied.core.service import Service
 from envied.core.titles import Episode, Movie, Movies, Series
 from envied.core.tracks import Chapter, Chapters, Tracks
+import json
 
 
 class STV(Service):
@@ -55,25 +56,25 @@ class STV(Service):
         self.base = self.config["endpoints"]["base"]
 
     def search(self) -> Generator[SearchResult, None, None]:
-        data = {
-            "engine_key": "S1jgssBHdk8ZtMWngK_y",
-            "q": self.title,
-        }
-        r = self.session.post(self.config["endpoints"]["search"], data=data)
+        
+        search_term = self.title.replace(" ", "+")
+        r = self.session.get(self.config["endpoints"]["search"].format(search_term=search_term))
         r.raise_for_status()
-        results = r.json()["records"]["page"]
+        results = json.loads(r.text)["data"]
 
         for result in results:
-            label = result.get("category")
-            if label and isinstance(label, list):
-                label = result["category"][0]
+            title = result['attributes']["title"]
+            url  =  result['attributes']["permalink"]
+            synopsis = result['attributes']["long_description"]
+    
+            label = result["attributes"]["subGenre"]
 
             yield SearchResult(
-                id_=result.get("url"),
-                title=result.get("title"),
-                description=result.get("body"),
+                id_= self.config["endpoints"]["prefix"].strip("/") + result["attributes"]["permalink"],
+                title=title,
+                description=synopsis,
                 label=label,
-                url=result.get("url"),
+                url=url,
             )
 
     def get_titles(self) -> Union[Movies, Series]:

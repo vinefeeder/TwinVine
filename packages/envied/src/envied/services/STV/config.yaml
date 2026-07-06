@@ -17,4 +17,5 @@ headers:
 endpoints:
   base: https://player.api.stv.tv/v1/
   playback: https://edge.api.brightcove.com/playback/v1/accounts/{accounts}/videos/{id}
-  search: https://api.swiftype.com/api/v1/public/engines/search.json
+  prefix: https://player.stv.tv/
+  search: https://v4.api.stv.tv/v4/discovery/search?query={search_term}&indexUid=programme_index&limit=20&offset=0&facets="
