@@ -1,0 +1,17 @@
+service: TVNZ
+
+options: 
+
+media_dict: 
+  Drama: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/drama
+  Home and Living: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/home-and-living
+  Sport Documentaries: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/sport-documentaries
+  Natural World: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/natural-world
+  Foreign Language: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/foreign-language
+  True Crime: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/true-crime
+  Australian Drama: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/australian-drama
+  British Drama: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/british-drama
+  sci-fi-and-fantasy: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/sci-fi-and-fantasy
+  Factual: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/factual
+  Comedy: https://apis-edge-prod.tech.tvnz.co.nz/api/v1/web/play/page/categories/comedy
+

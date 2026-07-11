@@ -1,0 +1,978 @@
+import base64
+from datetime import datetime
+import json
+from math import e
+
+import random
+import sys
+import time
+import typing
+from uuid import UUID
+import click
+import re
+from typing import List, Literal, Optional, Set, Union, Tuple
+from http.cookiejar import CookieJar
+from itertools import zip_longest
+from Crypto.Random import get_random_bytes
+
+import jsonpickle
+from pymp4.parser import Box
+from pywidevine import PSSH, Cdm
+import requests
+from langcodes import Language
+from pathlib import Path
+
+from envied.core.constants import AnyTrack
+from envied.core.credential import Credential
+from envied.core.drm.widevine import Widevine
+from envied.core.service import Service
+from envied.core.titles import Titles_T, Title_T
+from envied.core.titles.episode import Episode, Series
+from envied.core.titles.movie import Movie, Movies
+from envied.core.titles.title import Title
+from envied.core.tracks import Tracks, Chapters, Hybrid
+from envied.core.tracks.audio import Audio
+from envied.core.tracks.chapter import Chapter
+from envied.core.tracks.subtitle import Subtitle
+from envied.core.tracks.track import Track
+from envied.core.tracks.video import Video
+from envied.core.utils.collections import flatten, as_list
+
+from envied.core.tracks.attachment import Attachment
+from envied.core.drm.playready import PlayReady
+from envied.core.titles.song import Song
+from envied.utils.base62 import decode
+from .MSL import MSL, KeyExchangeSchemes
+from .MSL.schemes.UserAuthentication import UserAuthentication
+
+class NF(Service):
+    """
+    Service for https://netflix.com
+    Version: 1.0.0
+
+    Authorization: Cookies
+    Security: UHD@SL3000/L1 FHD@SL3000/L1
+    """
+    TITLE_RE = [
+        r"^(?:https?://(?:www\.)?netflix\.com(?:/[a-z0-9]{2})?/(?:title/|watch/|.+jbv=))?(?P<id>\d+)",
+        r"^https?://(?:www\.)?unogs\.com/title/(?P<id>\d+)",
+    ]
+    ALIASES= ("NF", "Netflix")
+    NF_LANG_MAP = {
+        "es": "es-419",
+        "pt": "pt-PT",
+    }
+
+    @staticmethod
+    @click.command(name="Netflix", short_help="https://netflix.com")
+    @click.argument("title", type=str)
+    @click.option("-drm", "--drm-system", type=click.Choice(["widevine", "playready"], case_sensitive=False),
+                  default="widevine",
+                  help="which drm system to use")
+    @click.option("-p", "--profile", type=click.Choice(["MPL", "HPL", "QC", "MPL+HPL", "MPL+HPL+QC", "MPL+QC"], case_sensitive=False),
+                  default=None,
+                  help="H.264 profile to use. Default is best available.")
+    @click.option("--meta-lang", type=str, help="Language to use for metadata")
+    @click.option("-ht","--hydrate-track", is_flag=True, default=False, help="Hydrate missing audio and subtitle.")
+    @click.option("-hb", "--high-bitrate", is_flag=True, default=False, help="Get more video bitrate")
+    @click.pass_context
+    def cli(ctx, **kwargs):
+        return NF(ctx, **kwargs)
+
+    def __init__(self, ctx: click.Context, title: str, drm_system: Literal["widevine", "playready"], profile: str, meta_lang: str, hydrate_track: bool, high_bitrate: bool):
+        super().__init__(ctx)
+        # General
+        self.title = title
+        self.profile = profile
+        self.meta_lang = meta_lang
+        self.hydrate_track = hydrate_track
+        self.drm_system = drm_system
+        self.profiles: List[str] = []
+        self.requested_profiles: List[str] = []
+        self.high_bitrate = high_bitrate
+        
+        # MSL
+        self.esn = self.cache.get("ESN")
+        self.msl: Optional[MSL] = None
+        self.userauthdata = None
+
+        # Download options
+        self.range = ctx.parent.params.get("range_") or [Video.Range.SDR]
+        self.vcodec = ctx.parent.params.get("vcodec") or Video.Codec.AVC # Defaults to H264
+        self.acodec : Audio.Codec = ctx.parent.params.get("acodec") or Audio.Codec.EC3
+        self.quality: List[int] = ctx.parent.params.get("quality")
+        self.audio_only = ctx.parent.params.get("audio_only")
+        self.subs_only = ctx.parent.params.get("subs_only")
+        self.chapters_only = ctx.parent.params.get("chapters_only")
+
+
+    def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
+        # Configure first before download
+        self.log.debug("Authenticating Netflix service")
+        auth = super().authenticate(cookies, credential)
+        if not cookies:
+            raise EnvironmentError("Service requires Cookies for Authentication.")
+        self.configure()
+        return auth
+
+    def get_titles(self) -> Titles_T:
+        metadata = self.get_metadata(self.title)
+        # self.log.info(f"Metadata: {jsonpickle.encode(metadata, indent=2)}")
+        if "video" not in metadata:
+            self.log.error(f"Failed to get metadata: {metadata}")
+            sys.exit(1)
+        titles: Titles_T | None = None
+        if metadata["video"]["type"] == "movie":
+            movie = Movie(
+                id_=self.title,
+                name=metadata["video"]["title"],
+                year=metadata["video"]["year"],
+                service=self.__class__,
+                data=metadata["video"],
+                description=metadata["video"]["synopsis"]
+            )
+            titles = Movies([
+                movie
+            ])
+        else:
+            # self.log.info(f"Episodes: {jsonpickle.encode(episodes, indent=2)}")
+
+            episode_list: List[Episode] = []
+            for season in metadata["video"]["seasons"]:
+                for episode in season["episodes"]:
+                    episode_list.append(
+                        Episode(
+                            id_=self.title,
+                            title=metadata["video"]["title"],
+                            year=season["year"],
+                            service=self.__class__,
+                            season=season["seq"],
+                            number=episode["seq"],
+                            name=episode["title"],
+                            data=episode,
+                            description=episode["synopsis"],
+                        )
+                    )
+
+            titles = Series(episode_list)
+
+
+
+        return titles
+
+
+
+    def get_tracks(self, title: Title_T) -> Tracks:
+        tracks = Tracks()
+    
+        def mark_repack(track_group):
+            # mark videos + audio
+            for t in track_group.videos + track_group.audio:
+                t.needs_repack = True
+    
+            # mark subtitles
+            for t in getattr(track_group, "subtitles", []):
+                t.needs_repack = True
+    
+        # -------------------------------
+        # Parse manifests / fetch tracks
+        # -------------------------------
+        if self.vcodec == Video.Codec.AVC:
+            try:
+                manifest = self.get_manifest(title, self.profiles)
+                movie_track = self.manifest_as_tracks(manifest, title, self.hydrate_track)
+                mark_repack(movie_track)
+                tracks.add(movie_track)
+    
+                if self.profile is not None:
+                    self.log.info(f"Requested profiles: {self.profile}")
+                else:
+                    qc_720_profile = [
+                        x for x in self.config["profiles"]["video"][self.vcodec.extension.upper()]["QC"]
+                        if "l40" not in x and 720 in self.quality
+                    ]
+    
+                    # QC profiles
+                    qc_manifest = self.get_manifest(
+                        title,
+                        qc_720_profile if 720 in self.quality
+                        else self.config["profiles"]["video"][self.vcodec.extension.upper()]["QC"]
+                    )
+                    qc_tracks = self.manifest_as_tracks(qc_manifest, title, False)
+                    mark_repack(qc_tracks)
+                    tracks.add(qc_tracks.videos)
+    
+                    # MPL Profiles
+                    mpl_manifest = self.get_manifest(
+                        title,
+                        [x for x in self.config["profiles"]["video"][self.vcodec.extension.upper()]["MPL"]
+                         if "l40" not in x]
+                    )
+                    mpl_tracks = self.manifest_as_tracks(mpl_manifest, title, False)
+                    mark_repack(mpl_tracks)
+                    tracks.add(mpl_tracks.videos)
+    
+            except Exception as e:
+                self.log.error(e)
+    
+        else:
+            # HEVC / DV / HDR mode
+            if self.high_bitrate:
+                splitted_profiles = self.split_profiles(self.profiles)
+                for index, profile_list in enumerate(splitted_profiles):
+                    try:
+                        self.log.debug(f"Index: {index}. Getting profiles: {profile_list}")
+                        manifest = self.get_manifest(title, profile_list)
+                        manifest_tracks = self.manifest_as_tracks(
+                            manifest,
+                            title,
+                            self.hydrate_track if index == 0 else False
+                        )
+                        mark_repack(manifest_tracks)
+                        tracks.add(manifest_tracks if index == 0 else manifest_tracks.videos)
+    
+                    except Exception:
+                        self.log.error(f"Error getting profile: {profile_list}. Skipping")
+                        continue
+            else:
+                try:
+                    manifest = self.get_manifest(title, self.profiles)
+                    manifest_tracks = self.manifest_as_tracks(manifest, title, self.hydrate_track)
+                    mark_repack(manifest_tracks)
+                    tracks.add(manifest_tracks)
+                except Exception as e:
+                    self.log.error(e)
+    
+        # --------------------------------------------------------
+        # 🧩 HYBRID DV+HDR Injection (copied from 1st script)
+        # --------------------------------------------------------
+        video_ranges = [v.range for v in tracks.videos]
+        has_dv = Video.Range.DV in video_ranges
+        has_hdr10 = Video.Range.HDR10 in video_ranges
+        has_hdr10p = Video.Range.HDR10P in video_ranges
+    
+        if self.range[0] == Video.Range.HYBRID and has_hdr10 and (has_dv or has_hdr10p):
+            try:
+                self.log.info("Performing HYBRID DV+HDR injection...")
+    
+                hdr_video = next((v for v in tracks.videos if v.range == Video.Range.HDR10), None)
+                dv_video = next((v for v in tracks.videos if v.range in (Video.Range.DV, Video.Range.HDR10P)), None)
+    
+                if not hdr_video or not dv_video:
+                    raise Exception("Missing HDR10 or DV video track for hybrid merge")
+    
+                # Ensure both files exist before injection
+                def ensure_local_file(video):
+                    if not getattr(video, "path", None) or not os.path.exists(video.path):
+                        temp_path = config.directories.temp / f"{video.id}.hevc"
+                        self.log.info(f"Downloading temporary stream for {video.range} → {temp_path.name}")
+                        with self.session.get(video.url, stream=True) as r:
+                            r.raise_for_status()
+                            with open(temp_path, "wb") as f:
+                                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                                    f.write(chunk)
+                        video.path = temp_path
+                    return video.path
+    
+                ensure_local_file(hdr_video)
+                ensure_local_file(dv_video)
+    
+                # Perform hybrid merge
+                Hybrid([hdr_video, dv_video], self.__class__.__name__.lower())
+    
+                injected_path = config.directories.temp / "HDR10-DV.hevc"
+                self.log.info(f"Hybrid file created → {injected_path}")
+    
+                # Replace HDR10 with merged track
+                hdr_video.range = Video.Range.DV
+                hdr_video.path = injected_path
+    
+            except Exception as e:
+                self.log.warning(f"Hybrid injection failed: {e}")
+    
+        # --------------------------------------------------------
+        # Disable proxy for all tracks
+        # --------------------------------------------------------
+        for track in tracks:
+            track.needs_proxy = False
+    
+        # --------------------------------------------------------
+        # Add Attachments + Save poster
+        # --------------------------------------------------------
+        try:
+            if isinstance(title, Movie):
+                poster_url = title.data["boxart"][0]["url"]
+            else:
+                poster_url = title.data["stills"][0]["url"]
+
+            # Temp directory
+            temp_dir = Path(self.config.get("directories", {}).get("Downloads", "./Downloads"))
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
+            poster_path = temp_dir / "poster.jpg"
+
+            # Save poster locally
+            try:
+                resp = requests.get(poster_url, timeout=15)
+                if resp.status_code == 200:
+                    with open(poster_path, "wb") as f:
+                        f.write(resp.content)
+            except Exception as e:
+                self.log.error(f"Failed to save poster.jpg: {e}")
+
+            # Create attachment
+            attachment = Attachment.from_url(url=poster_url)
+            attachment.filename = str(poster_path)
+            tracks.add(attachment)
+
+        except Exception as e:
+            self.log.error(f"Failed to add attachments: {e}")
+
+        return tracks
+    
+        return tracks
+        
+    def split_profiles(self, profiles: List[str]) -> List[List[str]]:
+        """
+        Split profiles based on codec level ranges and also DV/HDR groups for HYBRID mode.
+        """
+    
+        # -----------------------------
+        # Patterns for profile splitting
+        # -----------------------------
+        if self.vcodec == Video.Codec.AVC:
+            level_patterns = ["l30", "l31", "l40"]
+        else:
+            level_patterns = ["L30", "L31", "L40", "L41", "L50", "L51"]
+    
+        # -----------------------------
+        # HYBRID MODE — Add DV/HDR splits
+        # -----------------------------
+        dv_patterns = ["DV", "dv"]
+        hdr10_patterns = ["HDR10", "hdr10"]
+        hdr10p_patterns = ["HDR10P", "hdr10p"]
+    
+        result: List[List[str]] = []
+        used = set()
+    
+        # -----------------------------
+        # Group DV profiles first
+        # -----------------------------
+        if self.range[0] == Video.Range.HYBRID:
+            dv_group = [p for p in profiles if any(tag in p for tag in dv_patterns)]
+            if dv_group:
+                result.append(dv_group)
+                used.update(dv_group)
+    
+            # Group HDR10 profiles
+            hdr10_group = [p for p in profiles if any(tag in p for tag in hdr10_patterns)]
+            if hdr10_group:
+                result.append(hdr10_group)
+                used.update(hdr10_group)
+    
+            # Group HDR10+ profiles
+            hdr10p_group = [p for p in profiles if any(tag in p for tag in hdr10p_patterns)]
+            if hdr10p_group:
+                result.append(hdr10p_group)
+                used.update(hdr10p_group)
+    
+        # -----------------------------
+        # Normal HEVC/H264 Level Splitting
+        # -----------------------------
+        for pattern in level_patterns:
+            group = [p for p in profiles if (pattern in p and p not in used)]
+            if group:
+                result.append(group)
+                used.update(group)
+    
+        # -----------------------------
+        # Any remaining profiles
+        # -----------------------------
+        leftover = [p for p in profiles if p not in used]
+        if leftover:
+            result.append(leftover)
+    
+        return result
+        
+        
+    def get_chapters(self, title: Title_T) -> Chapters:
+        chapters: Chapters = Chapters()
+        # self.log.info(f"Title data: {title.data}")
+        credits = title.data["skipMarkers"]["credit"]
+        if credits["start"] > 0 and credits["end"] > 0:
+            chapters.add(Chapter(
+                timestamp=credits["start"], # Milliseconds
+                name="Intro"
+            ))
+            chapters.add(
+                Chapter(
+                    timestamp=credits["end"], # Milliseconds
+                    name="Part 01"
+                )
+            )
+
+        chapters.add(Chapter(
+            timestamp=float(title.data["creditsOffset"]), # this is seconds, needed to assign to float
+            name="Outro"
+        ))
+
+        return chapters
+
+    def get_widevine_license(self, *, challenge: bytes, title: Movie | Episode | Song, track: AnyTrack) -> bytes | str | None:
+        if not self.msl:
+            self.log.error(f"MSL Client is not intialized!")
+            sys.exit(1)
+        application_data = {
+                "version": 2,
+                "url": track.data["license_url"],
+                "id": int(time.time() * 10000),
+                "esn": self.esn.data,
+                "languages": ["en-US"],
+                # "uiVersion": "shakti-v9dddfde5",
+                "clientVersion": "6.0026.291.011",
+                "params": [{
+                    "sessionId": base64.b64encode(get_random_bytes(16)).decode("utf-8"),
+                    "clientTime": int(time.time()),
+                    "challengeBase64": base64.b64encode(challenge).decode("utf-8"),
+                    "xid": str(int((int(time.time()) + 0.1612) * 1000)),
+                }],
+                "echo": "sessionId"
+            }
+        header, payload_data = self.msl.send_message(
+            endpoint=self.config["endpoints"]["license"],
+            params={
+                "reqAttempt": 1,
+                "reqName": "license",
+            },
+            application_data=application_data,
+            userauthdata=self.userauthdata
+        )
+        if not payload_data:
+            self.log.error(f" - Failed to get license: {header['message']} [{header['code']}]")
+            sys.exit(1)
+        if "error" in payload_data[0]:
+            error = payload_data[0]["error"]
+            error_display = error.get("display")
+            error_detail = re.sub(r" \(E3-[^)]+\)", "", error.get("detail", ""))
+
+            if error_display:
+                self.log.critical(f" - {error_display}")
+            if error_detail:
+                self.log.critical(f" - {error_detail}")
+
+            if not (error_display or error_detail):
+                self.log.critical(f" - {error}")
+
+            sys.exit(1)
+        return payload_data[0]["licenseResponseBase64"]
+    
+    def get_playready_license(self, *, challenge: bytes, title: Movie | Episode | Song, track: AnyTrack) -> bytes | str | None:
+        return None
+        # return super().get_widevine_license(challenge=challenge, title=title, track=track)
+
+    def configure(self):
+        # -----------------------------
+        # Profiles selection
+        # -----------------------------
+        if self.profile is None:
+            self.profiles = self.config["profiles"]["video"][self.vcodec.extension.upper()]
+    
+        if self.profile is not None:
+            self.requested_profiles = self.profile.split('+')
+            self.log.info(f"Requested profile: {self.requested_profiles}")
+        else:
+            self.requested_profiles = self.config["profiles"]["video"][self.vcodec.extension.upper()]
+    
+        # -----------------------------
+        # Validate codec support
+        # -----------------------------
+        if self.vcodec.extension.upper() not in self.config["profiles"]["video"]:
+            raise ValueError(f"Video Codec {self.vcodec} is not supported by Netflix")
+    
+        # -----------------------------
+        # HYBRID MODE FIX
+        # -----------------------------
+        if self.range[0] == Video.Range.HYBRID:
+            # Only allowed for HEVC
+            if self.vcodec != Video.Codec.HEVC:
+                self.log.error("HYBRID mode is only supported for HEVC codec.")
+                sys.exit(1)
+    
+            self.log.info("HYBRID mode detected → Skipping standard range validation")
+            # Skip all range validation completely
+        else:
+            # Normal validation path (non-HYBRID)
+            if self.range[0].name not in list(self.config["profiles"]["video"][self.vcodec.extension.upper()].keys()) \
+                    and self.vcodec not in (Video.Codec.AVC, Video.Codec.VP9):
+    
+                self.log.error(f"Video range {self.range[0].name} is not supported by Video Codec: {self.vcodec}")
+                sys.exit(1)
+    
+            if len(self.range) > 1:
+                self.log.error("Multiple video range is not supported right now.")
+                sys.exit(1)
+    
+            if self.vcodec == Video.Codec.AVC and self.range[0] != Video.Range.SDR:
+                self.log.error("H.264 Video Codec only supports SDR")
+                sys.exit(1)
+    
+        # -----------------------------
+        # Final profile resolution
+        # -----------------------------
+        self.profiles = self.get_profiles()
+    
+        self.log.info("Initializing a MSL client")
+        self.get_esn()
+        scheme = KeyExchangeSchemes.AsymmetricWrapped
+        self.log.info(f"Scheme: {scheme}")
+    
+        self.msl = MSL.handshake(
+            scheme=scheme,
+            session=self.session,
+            endpoint=self.config["endpoints"]["manifest"],
+            sender=self.esn.data,
+            cache=self.cache.get("MSL")
+        )
+    
+        cookie = self.session.cookies.get_dict()
+        self.userauthdata = UserAuthentication.NetflixIDCookies(
+            netflixid=cookie["NetflixId"],
+            securenetflixid=cookie["SecureNetflixId"]
+        )
+
+
+    def get_profiles(self):
+        result_profiles = []
+    
+        # -------------------------------
+        # AVC logic (unchanged)
+        # -------------------------------
+        if self.vcodec == Video.Codec.AVC:
+            if self.requested_profiles is not None:
+                for req in self.requested_profiles:
+                    result_profiles.extend(
+                        flatten(list(self.config["profiles"]["video"][self.vcodec.extension.upper()][req]))
+                    )
+                return result_profiles
+    
+            result_profiles.extend(
+                flatten(list(self.config["profiles"]["video"][self.vcodec.extension.upper()].values()))
+            )
+            return result_profiles
+    
+        # -------------------------------
+        # VP9 logic (unchanged)
+        # -------------------------------
+        if self.vcodec == Video.Codec.VP9 and self.range[0] != Video.Range.HDR10:
+            result_profiles.extend(
+                self.config["profiles"]["video"][self.vcodec.extension.upper()].values()
+            )
+            return result_profiles
+    
+        # -------------------------------
+        # HEVC Hybrid mode (FIXED)
+        # -------------------------------
+        if self.vcodec == Video.Codec.HEVC and self.range[0] == Video.Range.HYBRID:
+            self.log.info("HYBRID mode detected → Using HDR10 + DV profiles")
+        
+            hevc_profiles = self.config["profiles"]["video"][self.vcodec.extension.upper()]
+        
+            result_profiles = []
+        
+            # 1. HDR10 FIRST
+            if "HDR10" in hevc_profiles:
+                result_profiles += hevc_profiles["HDR10"]
+        
+            # 2. HDR10P (some titles use this instead of HDR10)
+            if "HDR10P" in hevc_profiles:
+                result_profiles += hevc_profiles["HDR10P"]
+        
+            # 3. DV LAST (IMPORTANT!)
+            if "DV" in hevc_profiles:
+                result_profiles += hevc_profiles["DV"]
+        
+            return result_profiles
+    
+        # -------------------------------
+        # Normal HEVC (non HYBRID)
+        # -------------------------------
+        for profiles in self.config["profiles"]["video"][self.vcodec.extension.upper()]:
+            for r in self.range:
+                if r in profiles:
+                    result_profiles.extend(
+                        self.config["profiles"]["video"][self.vcodec.extension.upper()][r.name]
+                    )
+    
+        self.log.debug(f"Result_profiles: {result_profiles}")
+        return result_profiles
+        
+    def get_esn(self):
+        ESN_GEN = "".join(random.choice("0123456789ABCDEF") for _ in range(30))
+        esn_value = f"NFCDIE-03-{ESN_GEN}"
+        # Check if ESN is expired or doesn't exist
+        if self.esn.data is None or self.esn.data == {} or (hasattr(self.esn, 'expired') and self.esn.expired):
+            # Set new ESN with 6-hour expiration
+            self.esn.set(esn_value, 1 * 60 * 60)  # 6 hours in seconds
+            self.log.info(f"Generated new ESN with 1-hour expiration")
+        else:
+            self.log.info(f"Using cached ESN.")
+        self.log.info(f"ESN: {self.esn.data}")
+
+
+    def get_metadata(self, title_id: str):
+        """
+        Obtain Metadata information about a title by it's ID.
+        :param title_id: Title's ID.
+        :returns: Title Metadata.
+        """
+
+        try:
+            metadata = self.session.get(
+                self.config["endpoints"]["metadata"].format(build_id="release"),
+                params={
+                    "movieid": title_id,
+                    "drmSystem": self.config["configuration"]["drm_system"],
+                    "isWatchlistEnabled": False,
+                    "isShortformEnabled": False,
+                    "languages": self.meta_lang
+                }
+            ).json()
+        except requests.HTTPError as e:
+            if e.response.status_code == 500:
+                self.log.warning(
+                    " - Recieved a HTTP 500 error while getting metadata, deleting cached reactContext data"
+                )
+                # self.cache.
+                # os.unlink(self.get_cache("web_data.json"))
+                # return self.get_metadata(self, title_id)
+            raise Exception(f"Error getting metadata: {e}")
+        except json.JSONDecodeError:
+            self.log.error(" - Failed to get metadata, title might not be available in your region.")
+            sys.exit(1)
+        else:
+            if "status" in metadata and metadata["status"] == "error":
+                self.log.error(
+                    f" - Failed to get metadata, cookies might be expired. ({metadata['message']})"
+                )
+                sys.exit(1)
+            return metadata
+
+    def get_manifest(self, title: Title_T, video_profiles: List[str], required_text_track_id: Optional[str] = None, required_audio_track_id: Optional[str] = None):
+        audio_profiles = self.config["profiles"]["audio"].values()
+        video_profiles = sorted(set(flatten(as_list(
+                video_profiles,
+                audio_profiles,
+                self.config["profiles"]["video"]["H264"]["BPL"] if self.vcodec == Video.Codec.AVC else [],
+                self.config["profiles"]["subtitles"],
+        ))))
+        
+
+            
+        self.log.debug("Profiles:\n\t" + "\n\t".join(video_profiles))
+
+        if not self.msl:
+            raise Exception("MSL Client is not intialized.")
+
+        params = {
+            "reqAttempt": 1,
+            "reqPriority": 10,
+            "reqName": "manifest",
+        }
+        _, payload_chunks = self.msl.send_message(
+            endpoint=self.config["endpoints"]["manifest"],
+            params=params,
+            application_data={
+                "version": 2,
+                "url": "manifest",
+                "id": int(time.time()),
+                "esn": self.esn.data,
+                "languages": ["en-US"],
+                "clientVersion": "6.0026.291.011",
+                "params": {
+                    "clientVersion": "6.0051.090.911",
+                    "challenge": self.config["payload_challenge_pr"] if self.drm_system == 'playready' else self.config["payload_challenge"],
+                    "challanges": {
+                        "default": self.config["payload_challenge_pr"] if self.drm_system == 'playready' else self.config["payload_challenge"]
+                    },
+                    "contentPlaygraph": ["v2"],
+                    "deviceSecurityLevel": "3000",
+                    "drmVersion": 25,
+                    "desiredVmaf": "plus_lts",
+                    "desiredSegmentVmaf": "plus_lts",
+                    "flavor": "STANDARD",  # ? PRE_FETCH, SUPPLEMENTAL
+                    "drmType": self.drm_system,
+                    "imageSubtitleHeight": 1080,
+                    "isBranching": False,
+                    "isNonMember": False,
+                    "isUIAutoPlay": False,
+                    "licenseType": "standard",
+                    "liveAdsCapability": "replace",
+                    "liveMetadataFormat": "INDEXED_SEGMENT_TEMPLATE",
+                    "manifestVersion": "v2",
+                    "osName": "windows",
+                    "osVersion": "10.0",
+                    "platform": "138.0.0.0",
+                    "profilesGroups": [{
+                        "name": "default",
+                        "profiles": video_profiles
+                    }],
+                    "profiles": video_profiles,
+                    "preferAssistiveAudio": False,
+                    "requestSegmentVmaf": False,
+                    "requiredAudioTrackId": required_audio_track_id, # This is for getting missing audio tracks (value get from `new_track_id``)
+                    "requiredTextTrackId": required_text_track_id, # This is for getting missing subtitle. (value get from `new_track_id``)
+                    "supportsAdBreakHydration": False,
+                    "supportsNetflixMediaEvents": True,
+                    "supportsPartialHydration": True, # This is important if you want get available all tracks. but you must fetch each missing url tracks with "requiredAudioTracksId" or "requiredTextTrackId"
+                    "supportsPreReleasePin": True,
+                    "supportsUnequalizedDownloadables": True,
+                    "supportsWatermark": True,
+                    "titleSpecificData": {
+                        title.data.get("episodeId", title.data["id"]): {"unletterboxed": False}
+                    },
+                    "type": "standard",  # ? PREPARE
+                    "uiPlatform": "SHAKTI",
+                    "uiVersion": "shakti-v49577320",
+                    "useBetterTextUrls": True,
+                    "useHttpsStreams": True,
+                    "usePsshBox": True,
+                    "videoOutputInfo": [{
+                        # todo ; make this return valid, but "secure" values, maybe it helps
+                        "type": "DigitalVideoOutputDescriptor",
+                        "outputType": "unknown",
+                        "supportedHdcpVersions": self.config["configuration"]["supported_hdcp_versions"],
+                        "isHdcpEngaged": self.config["configuration"]["is_hdcp_engaged"]
+                    }],
+                    "viewableId": title.data.get("episodeId", title.data["id"]),
+                    "xid": str(int((int(time.time()) + 0.1612) * 1000)),
+                    "showAllSubDubTracks": True,
+                }
+            },
+            userauthdata=self.userauthdata
+        )
+        if "errorDetails" in payload_chunks:
+            raise Exception(f"Manifest call failed: {payload_chunks['errorDetails']}")
+        # with open(f"./manifest_{"+".join(video_profiles)}.json", mode='w') as r:
+        #     r.write(jsonpickle.encode(payload_chunks, indent=4))
+        return payload_chunks
+        
+    @staticmethod
+    def get_original_language(manifest) -> Language:
+        for language in manifest["audio_tracks"]:
+            if language["languageDescription"].endswith(" [Original]"):
+                return Language.get(language["language"])
+        # e.g. get `en` from "A:1:1;2;en;0;|V:2:1;[...]"
+        return Language.get(manifest["defaultTrackOrderList"][0]["mediaId"].split(";")[2])
+
+    def get_widevine_service_certificate(self, *, challenge: bytes, title: Movie | Episode | Song, track: AnyTrack) -> bytes | str:
+        return self.config["certificate"]
+
+    def manifest_as_tracks(self, manifest, title: Title_T, hydrate_tracks = False) -> Tracks:
+        
+        tracks = Tracks()
+        original_language = self.get_original_language(manifest)
+        self.log.debug(f"Original language: {original_language}")
+        license_url = manifest["links"]["license"]["href"]
+        # self.log.info(f"Video: {jsonpickle.encode(manifest["video_tracks"], indent=2)}")
+        # self.log.info()
+        for video in reversed(manifest["video_tracks"][0]["streams"]):
+            # self.log.info(video)
+            id = video["downloadable_id"]
+            # self.log.info(f"Adding video {video["res_w"]}x{video["res_h"]}, bitrate: {(float(video["framerate_value"]) / video["framerate_scale"]) if "framerate_value" in video else None} with profile {video["content_profile"]}. kid: {video["drmHeaderId"]}")
+            tracks.add(
+                Video(
+                    id_=video["downloadable_id"],
+                    url=video["urls"][0]["url"],
+                    codec=Video.Codec.from_netflix_profile(video["content_profile"]),
+                    bitrate=video["bitrate"] * 1000,
+                    width=video["res_w"],
+                    height=video["res_h"],
+                    fps=(float(video["framerate_value"]) / video["framerate_scale"]) if "framerate_value" in video else None,
+                    language=Language.get(original_language),
+                    edition=video["content_profile"],
+                    range_=self.parse_video_range_from_profile(video["content_profile"]),
+                    drm=[Widevine(
+                        pssh=PSSH(
+                            # Box.parse(
+                            #     Box.build(
+                            #         dict(
+                            #             type=b"pssh",
+                            #             version=0,
+                            #             flags=0,
+                            #             system_ID=Cdm.uuid,
+                            #             init_data=b"\x12\x10" + UUID(hex=video["drmHeaderId"]).bytes
+                            #         )
+                            #     )
+                            # )
+                            manifest["video_tracks"][0]["drmHeader"]["bytes"]
+                        ),
+                        kid=video["drmHeaderId"]
+                    )],
+                    data={
+                        'license_url': license_url
+                    }
+                )
+            )
+        # Audio
+
+        # store unavailable tracks for hydrating later
+        unavailable_audio_tracks: List[Tuple[str, str]] = []
+        for index, audio in enumerate(manifest["audio_tracks"]):
+            if len(audio["streams"]) < 1:
+                # This 
+                # self.log.debug(f"Audio lang {audio["languageDescription"]} is available but no stream available.")
+                unavailable_audio_tracks.append((audio["new_track_id"], audio["id"])) # Assign to `unavailable_subtitle` for request missing audio tracks later
+                continue
+            # self.log.debug(f"Adding audio lang: {audio["language"]} with profile: {audio["content_profile"]}")
+            is_original_lang = audio["language"] == original_language.language
+            # self.log.info(f"is audio {audio["languageDescription"]} original language: {is_original_lang}")
+            for stream in audio["streams"]:
+                tracks.add(
+                    Audio(
+                        id_=stream["downloadable_id"],
+                        url=stream["urls"][0]["url"],
+                        codec=Audio.Codec.from_netflix_profile(stream["content_profile"]),
+                        language=Language.get(self.NF_LANG_MAP.get(audio["language"]) or audio["language"]),
+                        is_original_lang=is_original_lang,
+                        bitrate=stream["bitrate"] * 1000,
+                        channels=stream["channels"],
+                        descriptive=audio.get("rawTrackType", "").lower() == "assistive",
+                        name="[Original]" if Language.get(audio["language"]).language == original_language.language else None,
+                        joc=6 if "atmos" in stream["content_profile"] else None
+                    )
+                )
+
+    
+
+
+        # Subtitle
+        unavailable_subtitle: List[Tuple[str, str]] = []
+        for index, subtitle in enumerate(manifest["timedtexttracks"]):
+            if "isNoneTrack" in subtitle and subtitle["isNoneTrack"] == True:
+                continue
+            if subtitle["hydrated"] == False:
+                # This subtitles is there but has to request stream first
+                unavailable_subtitle.append((subtitle["new_track_id"], subtitle["id"])) # Assign to `unavailable_subtitle` for request missing subtitles later
+                # self.log.debug(f"Audio language: {subtitle["languageDescription"]} id: {subtitle["new_track_id"]} is not hydrated.")
+                
+                continue
+            
+            if subtitle["languageDescription"] == 'Off':
+                # I don't why this subtitles is requested, i consider for skip these subtitles for now
+                continue
+                # pass
+
+            id = list(subtitle["downloadableIds"].values())
+            language = Language.get(subtitle["language"])
+            profile = next(iter(subtitle["ttDownloadables"].keys()))
+            tt_downloadables = next(iter(subtitle["ttDownloadables"].values()))
+            is_original_lang = subtitle["language"] == original_language.language
+            # self.log.info(f"is subtitle {subtitle["languageDescription"]} original language {is_original_lang}")   
+            # self.log.info(f"ddd")
+            tracks.add(
+                Subtitle(
+                    id_=id[0],
+                    url=tt_downloadables["urls"][0]["url"],
+                    codec=Subtitle.Codec.from_netflix_profile(profile),
+                    language=language,
+                    forced=subtitle["isForcedNarrative"],
+                    cc=subtitle["rawTrackType"] == "closedcaptions",
+                    sdh=subtitle["trackVariant"] == 'STRIPPED_SDH' if "trackVariant" in subtitle else False,
+                    is_original_lang=is_original_lang,
+                    name=("[Original]" if language.language == original_language.language else None or "[Dubbing]" if "trackVariant" in subtitle and subtitle["trackVariant"] == "DUBTITLE" else None),
+                )
+            )
+        if hydrate_tracks == False:
+            return tracks
+        # Hydrate missing tracks
+        self.log.info(f"Getting all missing audio and subtitle tracks")
+        for audio_hydration, subtitle_hydration in zip_longest(unavailable_audio_tracks, unavailable_subtitle, fillvalue=("N/A", "N/A")):
+            # self.log.info(f"Audio hydration: {audio_hydration}")
+            manifest = self.get_manifest(title, self.profiles, subtitle_hydration[0], audio_hydration[0])
+            
+            audios = next(item for item in manifest["audio_tracks"] if 'id' in item and item["id"] == audio_hydration[1])
+            subtitles = next(item for item in manifest["timedtexttracks"] if 'id' in item and item["id"] == subtitle_hydration[1])
+            for stream in audios["streams"]:
+                if audio_hydration[0] == 'N/A' and audio_hydration[1] == 'N/A':
+                    # self.log.info(f"Skipping not available hydrated audio tracks")
+                    continue
+                tracks.add(
+                    Audio(
+                        id_=stream["downloadable_id"],
+                        url=stream["urls"][0]["url"],
+                        codec=Audio.Codec.from_netflix_profile(stream["content_profile"]),
+                        language=Language.get(self.NF_LANG_MAP.get(audios["language"]) or audios["language"]),
+                        is_original_lang=stream["language"] == original_language.language,
+                        bitrate=stream["bitrate"] * 1000,
+                        channels=stream["channels"],
+                        descriptive=audios.get("rawTrackType", "").lower() == "assistive",
+                        name="[Original]" if Language.get(audios["language"]).language == original_language.language else None,
+                        joc=6 if "atmos" in stream["content_profile"] else None
+                    )
+                )
+            
+            # self.log.info(jsonpickle.encode(subtitles, indent=2))
+            # sel
+            
+            if subtitle_hydration[0] == 'N/A':
+                # self.log.info(f"Skipping not available hydrated subtitle tracks")
+                continue
+            id = list(subtitles["downloadableIds"].values())
+            language = Language.get(subtitles["language"])
+            profile = next(iter(subtitles["ttDownloadables"].keys()))
+            tt_downloadables = next(iter(subtitles["ttDownloadables"].values()))
+            tracks.add(
+                Subtitle(
+                    id_=id[0],
+                    url=tt_downloadables["urls"][0]["url"],
+                    codec=Subtitle.Codec.from_netflix_profile(profile),
+                    language=language,
+                    forced=subtitles["isForcedNarrative"],
+                    cc=subtitles["rawTrackType"] == "closedcaptions",
+                    sdh=subtitles["trackVariant"] == 'STRIPPED_SDH' if "trackVariant" in subtitles else False,
+                    is_original_lang=subtitles["language"] == original_language.language,
+                    name=("[Original]" if language.language == original_language.language else None or "[Dubbing]" if "trackVariant" in subtitle and subtitle["trackVariant"] == "DUBTITLE" else None),
+                )
+            )
+                
+        return tracks
+
+    
+    def parse_video_range_from_profile(self, profile: str) -> Video.Range:
+        """
+        Parse the video range from a Netflix profile string.
+        
+        Args:
+            profile (str): The Netflix profile string (e.g., "hevc-main10-L30-dash-cenc")
+            
+        Returns:
+            Video.Range: The corresponding Video.Range enum value
+            
+        Examples:
+            >>> parse_video_range_from_profile("hevc-main10-L30-dash-cenc")
+            <Video.Range.SDR: 'SDR'>
+            >>> parse_video_range_from_profile("hevc-dv5-main10-L30-dash-cenc")
+            <Video.Range.DV: 'DV'>
+        """
+        
+        # Get video profiles from config
+        video_profiles = self.config.get("profiles", {}).get("video", {})
+        
+        # Search through all codecs and ranges to find the profile
+        for codec, ranges in video_profiles.items():
+            # if codec == 'H264':
+            #     return Video.Range.SDR # for H264 video always return SDR
+            for range_name, profiles in ranges.items():
+                # self.log.info(f"Checking range {range_name}")
+                if profile in profiles:
+                    # Return the corresponding Video.Range enum value
+                    try:
+                        # self.log.info(f"Found {range_name}")
+                        return Video.Range(range_name)
+                    except ValueError:
+                        # If range_name is not a valid Video.Range, return SDR as default
+                        self.log.debug(f"Video range is not valid {range_name}")
+                        return Video.Range.SDR
+        
+        # If profile not found, return SDR as default
+        return Video.Range.SDR

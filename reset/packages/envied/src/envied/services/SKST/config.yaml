@@ -1,0 +1,42 @@
+endpoints:
+  signin: "https://rango.id.skyshowtime.com/signin/service/international"
+  tokens: "https://ovp.skyshowtime.com/auth/tokens"
+  personas: "https://web.clients.skyshowtime.com/bff/personas/v2"
+  atom_node: "https://atom.skyshowtime.com/adapter-calypso/v3/query/node"
+  atom_search: "https://atom.skyshowtime.com/adapter-calypso/v3/query/search"
+  playback: "https://ovp.skyshowtime.com/video/playouts/vod"
+
+params:
+  provider: "SKYSHOWTIME"
+  proposition: "SKYSHOWTIME"
+  platform: "PC"
+  device: "COMPUTER"
+  client_version: "6.11.21-gsp"
+
+signature:
+  app_id: "SHOWMAX-ANDROID-v1"
+  key: "kC2UFjsH6PHrc5ENGfyTgC5bPA7aBVZ4aJAyqBBP"
+  version: "1.0"
+
+territories:
+  - NL
+  - PL
+  - ES
+  - PT
+  - SE
+  - NO
+  - DK
+  - FI
+  - CZ
+  - SK
+  - HU
+  - RO
+  - BG
+  - HR
+  - SI
+  - BA
+  - RS
+  - ME
+  - MK
+  - AL
+  - XK

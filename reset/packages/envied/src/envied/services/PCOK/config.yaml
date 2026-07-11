@@ -1,0 +1,33 @@
+profiles:
+  tv:
+    platform: ANDROIDTV
+    device: TV
+    client_sdk: NBCU-ANDROID-v3
+    hmac_key: JuLQgyFz9n89D9pxcN6ZWZXKWfgj2PNBUb32zybj
+  android:
+    platform: ANDROID
+    device: TABLET
+    client_sdk: NBCU-ANDROID-v3
+    hmac_key: JuLQgyFz9n89D9pxcN6ZWZXKWfgj2PNBUb32zybj
+  web:
+    platform: PC
+    device: COMPUTER
+    client_sdk: NBCU-WEB-v4
+    hmac_key: FvT9VtwvhtSZvqnExMsvDDTEvBqR3HdsMcBFtWYV
+
+client:
+  territory: US
+  provider: NBCU
+  proposition: NBCUOTT
+  auth_scheme: MESSO
+  profile: tv
+  device_id: PC
+  drm_device_id: UNKNOWN
+
+endpoints:
+  login:    https://rango.id.peacocktv.com/signin/service/international
+  personas: https://persona.id.peacocktv.com/persona-store/personas
+  tokens:   https://ovp.peacocktv.com/auth/tokens
+  me:       https://ovp.peacocktv.com/auth/users/me
+  node:     https://atom.peacocktv.com/adapter-calypso/v3/query/node
+  vod:      https://ovp.peacocktv.com/video/playouts/vod

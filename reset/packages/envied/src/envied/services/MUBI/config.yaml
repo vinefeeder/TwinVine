@@ -1,0 +1,12 @@
+endpoints:
+    account: "https://api.mubi.com/v4/account"
+    current_user: "https://api.mubi.com/v4/current_user"
+    film_by_slug: "https://api.mubi.com/v4/films/{slug}"
+    playback_languages: "https://api.mubi.com/v4/films/{film_id}/playback_languages"
+    initiate_viewing: "https://api.mubi.com/v4/films/{film_id}/viewing?parental_lock_enabled=true"
+    reels: "https://api.mubi.com/v4/films/{film_id}/reels"
+    secure_url: "https://api.mubi.com/v4/films/{film_id}/viewing/secure_url"
+    license: "https://lic.drmtoday.com/license-proxy-widevine/cenc/"
+    ip_geolocation: "https://directory.cookieyes.com/api/v1/ip"
+    series: "https://api.mubi.com/v4/series/{series_slug}"
+    season_episodes: "https://api.mubi.com/v4/series/{series_slug}/seasons/{season_slug}/episodes/available"

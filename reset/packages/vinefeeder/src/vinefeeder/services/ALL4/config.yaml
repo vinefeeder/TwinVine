@@ -1,0 +1,17 @@
+service_name: ALL4
+
+options:
+
+media_dict:
+  Film: 'https://www.channel4.com/categories/film'
+  Documentary: 'https://www.channel4.com/categories/documentaries'
+  Comedy: 'https://www.channel4.com/categories/comedy'
+  Drama: 'https://www.channel4.com/categories/drama'
+  Entertainment: 'https://www.channel4.com/categories/entertainment'
+  Lifestyle: 'https://www.channel4.com/categories/lifestyle'
+  News & Current Affairs: 'https://www.channel4.com/categories/news-current-affairs-and-politics'
+  Sport: 'https://www.channel4.com/categories/sport'
+  World Drama: 'https://www.channel4.com/categories/world-drama'
+  Box Sets: 'https://www.channel4.com/categories/boxsets'
+
+

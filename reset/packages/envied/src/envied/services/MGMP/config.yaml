@@ -1,0 +1,43 @@
+endpoints:
+  sessions: https://api.epixnow.com/v2/sessions
+  registration_code: https://api.epixnow.com/v2/devices/registration_code
+  graphql: https://api.epixnow.com/graphql
+  search: https://api.epixnow.com/v2/search
+
+headers:
+  Accept: application/json
+  User-Agent: okhttp/5..0
+
+client:
+  apikey: 592c205299de839aa3948643addfe0bc
+  device:
+    app_version: "225.0.2025225001"
+    device: android
+    display_height: 2160
+    display_width: 3840
+    dpi: 320
+    format: tv
+    manufacturer: NVIDIA
+    model: SHIELD Android TV
+    os: fire
+    os_version: "11"
+
+web:
+  endpoints:
+    sessions: https://api.mgmplus.com/v2/sessions
+    graphql: https://api.mgmplus.com/graphql
+  apikey: "53e208a9bbaee479903f43b39d7301f7"
+  device:
+    format: console
+    os: web
+    display_width: 2560
+    display_height: 1440
+    app_version: "1.0.2"
+    model: browser
+    manufacturer: google
+    device_interface_type: desktop
+
+amazon:
+  base: https://q423ce52d0d3f1.na.api.amazonvideo.com
+  device_type: AOAGZA014O5RE
+  marketplace: ATVPDKIKX0DER

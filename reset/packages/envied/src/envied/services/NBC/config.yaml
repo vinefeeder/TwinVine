@@ -1,0 +1,15 @@
+headers:
+  user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36
+  origin: https://www.nbc.com
+  referer: https://www.nbc.com/
+
+endpoints:
+  lemonade_url: https://lemonade.nbc.com/v1/vod/{account}/{guid}
+  license_url: https://drmproxy.digitalsvc.apps.nbcuni.com/drm-proxy/license/widevine
+
+# NBC uses Algolia for search. The app_id/api_key are
+algolia:
+  url: https://3nkvntt7f3-dsn.algolia.net/1/indexes/*/queries
+  app_id: 3NKVNTT7F3
+  api_key: c2df90d0ff616a2726139c671d6e6e8e
+  index: prod_multi-brand-unified-web

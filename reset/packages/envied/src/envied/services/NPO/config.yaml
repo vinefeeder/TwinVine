@@ -1,0 +1,10 @@
+endpoints:
+  metadata: "https://npo.nl/start/_next/data/{build_id}/video/{slug}.json"
+  metadata_series: "https://npo.nl/start/_next/data/{build_id}/serie/{slug}/afleveringen.json"
+  metadata_episode: "https://npo.nl/start/_next/data/{build_id}/serie/{series_slug}/seizoen-{season_slug}/{episode_slug}.json"
+  streams: "https://prod.npoplayer.nl/stream-link"
+  player_token: "https://npo.nl/start/api/domain/player-token?productId={product_id}"
+  license: "https://npo-drm-gateway.samgcloud.nepworldwide.nl/authentication"
+  homepage: "https://npo.nl/start"
+  search: "	https://npo.nl/start/api/domain/search-collection-items"
+DrmType: "widevine"

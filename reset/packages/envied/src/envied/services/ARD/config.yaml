@@ -1,0 +1,8 @@
+headers:
+  Accept-Language: de-DE,de;q=0.8
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0
+
+endpoints:
+  item: https://api.ardmediathek.de/page-gateway/pages/ard/item/{item_id}?embedded=true&mcV6=true
+  grouping: https://api.ardmediathek.de/page-gateway/pages/ard/grouping/{item_id}?seasoned=true&embedded=true
+  hbbtv: https://tv.ardmediathek.de/dyn/get?id=video:{item_id}

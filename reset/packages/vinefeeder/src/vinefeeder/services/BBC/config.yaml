@@ -1,0 +1,22 @@
+service: BBC
+loader_class: BbcLoader
+
+description: A UK Public Sevice broadcaster
+
+hlg_status: True
+
+options: 
+
+media_dict:
+  Film: 'https://www.bbc.co.uk/iplayer/categories/films/featured'
+  Documentary: 'https://www.bbc.co.uk/iplayer/categories/documentaries/featured'
+  Comedy: 'https://www.bbc.co.uk/iplayer/categories/comedy/featured'
+  Drama: 'https://www.bbc.co.uk/iplayer/categories/drama-and-soaps/featured'
+  Entertainment: 'https://www.bbc.co.uk/iplayer/categories/entertainment/featured'
+  Lifestyle: 'https://www.channel4.com/categories/lifestyle'
+  News: 'https://www.bbc.co.uk/iplayer/categories/news/featured'
+  Sport: 'https://www.bbc.co.uk/iplayer/categories/sport/featured'
+  Lifestyle: 'https://www.bbc.co.uk/iplayer/categories/lifestyle/featured'
+  History: 'https://www.bbc.co.uk/iplayer/categories/history/featured'
+  Science/Nature: 'https://www.bbc.co.uk/iplayer/categories/science-and-nature/featured'
+  

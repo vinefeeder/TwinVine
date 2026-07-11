@@ -1,0 +1,22 @@
+service: STV
+
+options:
+
+media_dict:
+  Films: https://player.stv.tv/categories/movies
+  Sport: https://player.stv.tv/categories/the-sport-hub
+  Crime Dramas: https://player.stv.tv/categories/crime-drama
+  True Crime: https://player.stv.tv/categories/crime-punishment
+  Comedy Dramas: https://player.stv.tv/categories/comedy-drama
+  Documentaries: https://player.stv.tv/categories/documentaries
+  Dramas: https://player.stv.tv/categories/dramas
+  Entertainment: https://player.stv.tv/categories/entertainment
+  Soaps: https://player.stv.tv/categories/soaps
+  Food: https://player.stv.tv/categories/food-lifestyle
+  Scenic Scotland: https://player.stv.tv/categories/scenic-scotland
+  News: https://player.stv.tv/categories/news-current-affairs
+  Thrillers: https://player.stv.tv/categories/thrillers
+  History Hit: https://player.stv.tv/categories/history-hit
+  Real Crime: https://player.stv.tv/categories/real-crime
+  Real Stories: https://player.stv.tv/categories/real-stories
+  Real Life: https://player.stv.tv/categories/real-life

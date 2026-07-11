@@ -1,0 +1,15 @@
+headers:
+  user-agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+  x-version: "web/undefined/undefined/undefined"
+
+endpoints:
+  login: "https://www.kanopy.com/kapi/login"
+  users: "https://www.kanopy.com/kapi/users/{user_id}"
+  memberships: "https://www.kanopy.com/kapi/memberships"
+  institutions: "https://www.kanopy.com/kapi/institutions/alias/{alias}"
+  search: "https://www.kanopy.com/kapi/search/videos"
+  videos: "https://www.kanopy.com/kapi/videos/{video_id}"
+  items: "https://www.kanopy.com/kapi/videos/{video_id}/items"
+  plays: "https://www.kanopy.com/kapi/plays"
+  widevine: "https://www.kanopy.com/kapi/licenses/widevine/{drm_id}"
+  playready: "https://www.kanopy.com/kapi/licenses/playready/{drm_id}"

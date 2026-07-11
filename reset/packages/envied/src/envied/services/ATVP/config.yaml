@@ -1,0 +1,38 @@
+user_agent: 'ATVE/6.2.0 Android/10 build/6A226 maker/Google model/Chromecast FW/QTS2.200918.0337115981'
+storefront_mapping_url: 'https://gist.githubusercontent.com/BrychanOdlum/2208578ba151d1d7c4edeeda15b4e9b1/raw/8f01e4a4cb02cf97a48aba4665286b0e8de14b8e/storefrontmappings.json'
+
+endpoints:
+  title: 'https://tv.apple.com/api/uts/v3/{type}/{id}'
+  tv_episodes: 'https://tv.apple.com/api/uts/v2/view/show/{id}/episodes'
+  manifest: 'https://tv.apple.com/api/uts/v2/view/product/{id}/personalized'
+  license: 'https://play.itunes.apple.com/WebObjects/MZPlay.woa/wa/fpsRequest'
+  environment: 'https://tv.apple.com'
+
+params:
+  utsk: '6e3013c6d6fae3c2::::::9318c17fb39d6b9c'
+  caller: 'web'
+  v: '46'
+  pfm: 'appletv'
+  mfr: 'Apple'
+  locale: 'en-US'
+  l: 'en'
+  ctx_brand: 'tvs.sbd.4000'
+  count: '100'
+  skip: '0'
+
+headers:
+  Accept: 'application/json'
+  Accept-Language: 'en-US,en;q=0.9'
+  Connection: 'keep-alive'
+  DNT: '1'
+  Origin: 'https://tv.apple.com'
+  Referer: 'https://tv.apple.com/'
+  Sec-Fetch-Dest: 'empty'
+  Sec-Fetch-Mode: 'cors'
+  Sec-Fetch-Site: 'same-origin'
+
+quality_map:
+  SD: 480
+  HD720: 720
+  HD: 1080
+  UHD: 2160

@@ -1,0 +1,234 @@
+# Group or Username to postfix to the end of all download fienames following a dash
+#tag: ''
+
+# Set terminal background color (custom option not in CONFIG.md)
+set_terminal_bg: false
+
+# Muxing configuration
+muxing:
+  set_title: false
+
+# shakapackager or mp4decrypt
+decryption: shakapackager
+
+# Custom output templates for filenames
+# Configure output_template in your envied.yaml to control filename format.
+# If not configured, default scene-style templates are used and a warning is shown.
+# Available variables: {title}, {year}, {season}, {episode}, {season_episode}, {episode_name},
+#                     {quality}, {resolution}, {source}, {audio}, {audio_channels}, {audio_full},
+#                     {video}, {hdr}, {hfr}, {atmos}, {dual}, {multi}, {tag}, {edition}, {repack},
+#                     {lang_tag}
+# Conditional variables (included only if present): Add ? suffix like {year?}, {episode_name?}, {hdr?}
+# Customize the templates below:
+#
+# Example outputs:
+# Scene movies: 'The.Matrix.1999.1080p.SERVICE.WEB-DL.DDP5.1.H.264-EXAMPLE'
+# Scene movies (HDR): 'Dune.2021.2160p.SERVICE.WEB-DL.DDP5.1.HDR10.H.265-EXAMPLE'
+# Scene movies (REPACK): 'Dune.2021.REPACK.2160p.SERVICE.WEB-DL.DDP5.1.H.265-EXAMPLE'
+# Scene series: 'Breaking.Bad.2008.S01E01.Pilot.1080p.SERVICE.WEB-DL.DDP5.1.H.264-EXAMPLE'
+# Plex movies: 'The Matrix (1999)'
+# Plex series: 'Breaking Bad S01E01 Pilot'
+output_template:
+  # Scene-style naming (dot-separated)
+  #movies: '{title}.{year}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  #series: '{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}'
+  #songs: '{track_number}.{title}.{repack?}.{edition?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}'
+  #
+  # Plex-friendly naming (space-separated, clean format)
+  movies: '{title} ({year})'
+  series: '{title} {season_episode} {episode_name?}'
+  songs: '{track_number}. {title}'
+  #
+  # Minimal naming (basic info only)
+  # movies: '{title}.{year}.{quality}'
+  # series: '{title}.{season_episode}.{episode_name?}'
+  #
+  # Custom scene-style with specific elements
+  # movies: '{title}.{year}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{video}-{tag}'
+  # series: '{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}-{tag}'
+
+# Language-based tagging for output filenames
+# Automatically adds language identifiers (e.g., DANiSH, NORDiC, DKsubs) based on
+# audio and subtitle track languages. Rules are evaluated in order; first match wins.
+# Use {lang_tag?} in your output_template to place the tag in the filename.
+#
+# Conditions (all conditions in a rule must match):
+#   audio: <lang>                  - any audio track matches this language
+#   subs_contain: <lang>           - any subtitle matches this language
+#   subs_contain_all: [lang, ...]  - subtitles include ALL listed languages
+#
+# language_tags:
+#   rules:
+#     - audio: da
+#       tag: DANiSH
+#     - audio: sv
+#       tag: SWEDiSH
+#     - audio: nb
+#       tag: NORWEGiAN
+#     - audio: en
+#       subs_contain_all: [da, sv, nb]
+#       tag: NORDiC
+#     - audio: en
+#       subs_contain: da
+#       tag: DKsubs
+
+# Login credentials for each Service
+credentials:
+  ALL4: email:password
+  ROKU: email:password
+  TVNZ: email:password
+  TPTV: email:password
+  CBC: email:password
+# Override default directories used across envied
+directories:
+  cache: Cache
+  cookies: Cookies
+  dcsl: DCSL # Device Certificate Status List
+  downloads: Downloads
+  logs: Logs
+  temp: Temp
+  wvds: WVDs
+  prds: PRDs
+  # Additional directories that can be configured:
+  # commands: Commands
+  #services:
+  #  - ./envied/services/
+  vaults: vaults/
+  # fonts: Fonts
+
+# Pre-define which Widevine or PlayReady device to use for each Serviceuv run envied
+cdm:
+  default: device
+
+# Use pywidevine Serve-compliant Remote CDMs
+# Currently not working!
+#remote_cdm:
+#    - name: "CDRM_Project_API"
+#      device_type: ANDROID
+#      system_id: 22590
+#      security_level: 3
+#      host: "https://cdrm-project.com/remotecdm/widevine"
+#      secret: "CDRM"
+#      device_name: "public"
+
+
+# Key Vaults store your obtained Content Encryption Keys (CEKs)
+key_vaults:
+#- type: SQLite
+#  name: Local vault
+#  path: key_store.db
+
+- type: API
+  name: LibreDRM Vault
+  uri: https://api.mapiro.com/vault
+  token: 5fc8fcead3bc4c1403dcec54fc3a326fbd3ec95da3899d24
+
+- type: HTTPAPI
+  name: drmlab
+  host: http://api.drmlab.io/vault/
+  password: N7kQp4XzL2mV8cHrY9tFw5BjUa6DeGs3
+
+
+
+# Choose what software to use to download data
+downloader: n_m3u8dl_re
+# Options: requests | aria2c | curl_impersonate | n_m3u8dl_re
+# Can also be a mapping:
+# downloader:
+#   NF: requests
+#   AMZN: n_m3u8dl_re
+#   DSNP: n_m3u8dl_re
+#   default: requests
+
+# aria2c downloader configuration
+aria2c:
+  max_concurrent_downloads: 4
+  max_connection_per_server: 3
+  split: 5
+  file_allocation: falloc # none | prealloc | falloc | trunc
+
+# N_m3u8DL-RE downloader configuration
+n_m3u8dl_re:
+  thread_count: 16
+  ad_keyword: "advertisement"
+  use_proxy: true
+
+# curl_impersonate downloader configuration
+curl_impersonate:
+  browser: chrome120
+
+# Pre-define default options and switches of the dl command
+dl:
+  best: true
+  sub_format: srt
+  downloads: 4
+  workers: 16
+
+# Chapter Name to use when exporting a Chapter without a Name
+chapter_fallback_name: "Chapter {j:02}"
+
+# Case-Insensitive dictionary of headers for all Services
+headers:
+  Accept-Language: "en-US,en;q=0.8"
+  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.75 Safari/537.36"
+
+# Override default filenames used across envied
+filenames:
+  log: "envied_{name}_{time}.log"
+  config: "config.yaml"
+  root_config: "envied.yaml"
+  chapters: "Chapters_{title}_{random}.txt"
+  subtitle: "Subtitle_{id}_{language}.srt"
+
+# API key for The Movie Database (TMDB)
+tmdb_api_key: ""
+
+#conversion_method:
+# - auto (default): Smart routing - subby for WebVTT/SAMI, pycaption for others
+# - subby: Always use subby with advanced processing
+# - pycaption: Use only pycaption library (no SubtitleEdit, no subby)
+# - subtitleedit: Prefer SubtitleEdit when available, fall back to pycaption
+# - pysubs2: Use pysubs2 library (supports SRT/SSA/ASS/WebVTT/TTML/SAMI/MicroDVD/MPL2/TMP)
+subtitle:
+  conversion_method: auto
+  # sdh_method: Method to use for SDH (hearing impaired) stripping
+  # - auto (default): Try subby (SRT only), then SubtitleEdit (if available), then subtitle-filter
+  # - subby: Use subby library (SRT only)
+  # - subtitleedit: Use SubtitleEdit tool (Windows only, falls back to subtitle-filter)
+  # - filter-subs: Use subtitle-filter library directly
+  sdh_method: auto
+  # strip_sdh: Automatically create stripped (non-SDH) versions of SDH subtitles
+  # Set to false to disable automatic SDH stripping entirely (default: true)
+  strip_sdh: true
+  # convert_before_strip: Auto-convert VTT/other formats to SRT before using subtitle-filter
+  # This ensures compatibility when subtitle-filter is used as fallback (default: true)
+  convert_before_strip: true
+  # preserve_formatting: Preserve original subtitle formatting (tags, positioning, styling)
+  # When true, skips pycaption processing for WebVTT files to keep tags like <i>, <b>, positioning intact
+  # Combined with no sub_format setting, ensures subtitles remain in their original format (default: true)
+  preserve_formatting: true
+  # output_mode: Output mode for subtitles
+  # - mux: Embed subtitles in MKV container only (default)
+  # - sidecar: Save subtitles as separate files only
+  # - both: Embed in MKV AND save as sidecar files
+  output_mode: mux
+  # sidecar_format: Format for sidecar subtitle files
+  # Options: srt, vtt, ass, original (keep current format)
+  sidecar_format: srt
+
+
+# Configuration data for each Service
+services:
+  # Service-specific configuration goes here
+  # EXAMPLE:
+  #   api_key: "service_specific_key"
+
+# Legacy NordVPN configuration (use proxy_providers instead)
+#proxy_providers:
+#  nordvpn:
+#    username: username
+#    password: password
+#    server_map:
+#     us: 6918
+#     uk: 2613
+#     nz: 100

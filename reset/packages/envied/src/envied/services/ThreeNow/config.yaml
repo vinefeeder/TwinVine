@@ -1,0 +1,9 @@
+headers:
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.75 Safari/537.36
+
+endpoints:
+  base_api: https://now-api.fullscreen.nz/v5/
+  brightcove: https://edge.api.brightcove.com/playback/v1/accounts/{}/videos/{}
+  brightcove_account: 3812193411001
+
+policy: BCpkADawqM2NDYVFYXV66rIDrq6i9YpFSTom-hlJ_pdoGkeWuItRDsn1Bhm7QVyQvFIF0OExqoywBvX5-aAFaxYHPlq9st-1mQ73ZONxFHTx0N7opvkHJYpbd_Hi1gJuPP5qCFxyxB8oevg-
