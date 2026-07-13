@@ -57,7 +57,7 @@ def main(version: bool, debug: bool) -> None:
                 r"░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n" ,
                     style="ascii.art",
                 ),
-                Text("    more than unshackled....", style = "ascii.art"),
+                Text("  ... more than unshackled....", style = "ascii.art"),
                 f"\nv [repr.number]{__version__}[/] - https://github.com/vinefeeder/envied",
             ),
             (1, 11, 1, 10),
