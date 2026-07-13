@@ -34,12 +34,12 @@ def pretty_print():
         f"| |/ / / _ \\/ -_) _// -_) -_) _  / -_) __/" "\n"
         f"|___/_/_//_/\\__/__/  \\__/\\__/\\_,_/\\__/_/     [/]" + "\n\n"
         f"[{catppuccin_mocha['gray']}]TwinVine version {__version__}[/]\n"
-        f"[{catppuccin_mocha['text2']}]© 2024-25  A_n_g_e_l_a[/]\n\n"
+        f"[{catppuccin_mocha['text2']}] 2024-26  A_n_g_e_l_a[/]\n\n"
         f"[{catppuccin_mocha['pink']}]driving...[/]\n\n"
         f"[{catppuccin_mocha['pink']}]░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
         f"[{catppuccin_mocha['pink']}]░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
         f"[{catppuccin_mocha['pink']}]░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n\n"
-        f"[{catppuccin_mocha['pink']}]It's more than envied....[/]" + "\n"
+        f"[{catppuccin_mocha['pink']}] ... more than unshacked....[/]" + "\n"
 
  
 
