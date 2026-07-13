@@ -1,6 +1,7 @@
 # BBC  __init__.py
 """The BBC does not follow the same structures as most other srvices
-The BBC does not use  script = window.__PARAMS__ = ..."""
+For reliable UHD detection, use the vinefeeder text box with string rather than a url
+"""
 
 from pydoc import html
 
@@ -28,7 +29,6 @@ class BbcLoader(BaseLoader):
     options = None
 
     def __init__(self):
-        # self.HLG = None
         self.AVAILABLE_HLG = False
         self.uhd_list = []
 
