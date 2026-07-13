@@ -394,10 +394,7 @@ class BbcLoader(BaseLoader):
         )
 
         # specific to BBC
-        # self.options_list = split_options(self.options)
-        for item in selected_final_episodes:
-            #print(type(item))
-            #print(item)
+        for item in selected_final_episodes: #  string from beaupy
             for part in item.split(","):
                 if "UHD" in part:
                     uhd = part.split("UHD=")[1].strip()

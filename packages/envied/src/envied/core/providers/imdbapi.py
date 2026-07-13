@@ -7,7 +7,7 @@ import requests
 
 from envied.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, fuzzy_match
 
-# Mapping from our kind ("movie"/"tv") to imdbapi.dev title types
+# Mapping from our kind ("movie"/"tv") to IMDxAPI title types
 KIND_TO_TYPES: dict[str, list[str]] = {
     "movie": ["movie"],
     "tv": ["tvSeries", "tvMiniSeries"],
@@ -15,14 +15,14 @@ KIND_TO_TYPES: dict[str, list[str]] = {
 
 
 class IMDBApiProvider(MetadataProvider):
-    """IMDb metadata provider using imdbapi.dev (free, no API key)."""
+    """IMDb metadata provider using IMDxAPI (api.tiffara.com, free, no API key)."""
 
     NAME = "imdbapi"
-    REQUIRES_KEY = True
-    BASE_URL = "https://api.imdbapi.dev"
+    REQUIRES_KEY = False
+    BASE_URL = "https://api.tiffara.com"
 
     def is_available(self) -> bool:
-        return False  # no key needed
+        return True  # no key needed
 
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
         self.log.debug("Searching IMDBApi for %r (%s, %s)", title, kind, year)
