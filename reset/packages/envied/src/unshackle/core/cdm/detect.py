@@ -1,1 +1,0 @@
-from envied.core.cdm.detect import *  # noqa: F401,F403
