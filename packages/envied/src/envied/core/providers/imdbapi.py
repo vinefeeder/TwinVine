@@ -18,11 +18,11 @@ class IMDBApiProvider(MetadataProvider):
     """IMDb metadata provider using imdbapi.dev (free, no API key)."""
 
     NAME = "imdbapi"
-    REQUIRES_KEY = False
+    REQUIRES_KEY = True
     BASE_URL = "https://api.imdbapi.dev"
 
     def is_available(self) -> bool:
-        return True  # no key needed
+        return False  # no key needed
 
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
         self.log.debug("Searching IMDBApi for %r (%s, %s)", title, kind, year)
