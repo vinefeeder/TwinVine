@@ -1,5 +1,6 @@
-# Group or Username to postfix to the end of all download fienames following a dash
-#tag: ''
+# Envied configuration file
+# see unshackle, envied's parent for further configuration details:
+# https://github.com/unshackle-dl/unshackle/blob/dev/docs/reference/configuration.md
 
 # Set terminal background color (custom option not in CONFIG.md)
 set_terminal_bg: false
@@ -8,8 +9,11 @@ set_terminal_bg: false
 muxing:
   set_title: false
 
-# shakapackager or mp4decrypt
-decryption: shakapackager
+# shaka or mp4decrypt
+decryption:
+  default: shaka
+  ALL4: mp4decrypt
+  TPTV: mp4decrypt
 
 # Custom output templates for filenames
 # Configure output_template in your envied.yaml to control filename format.
@@ -46,6 +50,13 @@ output_template:
   # Custom scene-style with specific elements
   # movies: '{title}.{year}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{video}-{tag}'
   # series: '{title}.{year?}.{season_episode}.{episode_name?}.{quality}.{hdr?}.{source}.WEB-DL.{audio_full}.{atmos?}.{video}-{tag}'
+  #
+  # Folder naming (optional). One template for all, or a per-kind map.
+  # Valid kinds: movies, series, songs, albums (album vars: see docs).
+  # folder: '{title} ({year?})'
+  folder:
+    movies: '{title} ({year})'
+    series: '{title} ({year?})'
 
 # Language-based tagging for output filenames
 # Automatically adds language identifiers (e.g., DANiSH, NORDiC, DKsubs) based on
@@ -73,12 +84,16 @@ output_template:
 #       tag: DKsubs
 
 # Login credentials for each Service
+# email:password pairs should be provided for each service you want to use.
+# eg All4: nosmo.king@gmail.com:12345678
 credentials:
-  ALL4: email:password
+  ALL4: email:password 
   ROKU: email:password
   TVNZ: email:password
   TPTV: email:password
   CBC: email:password
+
+
 # Override default directories used across envied
 directories:
   cache: Cache
@@ -89,27 +104,11 @@ directories:
   temp: Temp
   wvds: WVDs
   prds: PRDs
-  # Additional directories that can be configured:
-  # commands: Commands
-  #services:
-  #  - ./envied/services/
-  vaults: vaults/
-  # fonts: Fonts
+
 
 # Pre-define which Widevine or PlayReady device to use for each Serviceuv run envied
 cdm:
   default: device
-
-# Use pywidevine Serve-compliant Remote CDMs
-# Currently not working!
-#remote_cdm:
-#    - name: "CDRM_Project_API"
-#      device_type: ANDROID
-#      system_id: 22590
-#      security_level: 3
-#      host: "https://cdrm-project.com/remotecdm/widevine"
-#      secret: "CDRM"
-#      device_name: "public"
 
 
 # Key Vaults store your obtained Content Encryption Keys (CEKs)
@@ -129,32 +128,7 @@ key_vaults:
   password: N7kQp4XzL2mV8cHrY9tFw5BjUa6DeGs3
 
 
-
-# Choose what software to use to download data
-downloader: n_m3u8dl_re
-# Options: requests | aria2c | curl_impersonate | n_m3u8dl_re
-# Can also be a mapping:
-# downloader:
-#   NF: requests
-#   AMZN: n_m3u8dl_re
-#   DSNP: n_m3u8dl_re
-#   default: requests
-
-# aria2c downloader configuration
-aria2c:
-  max_concurrent_downloads: 4
-  max_connection_per_server: 3
-  split: 5
-  file_allocation: falloc # none | prealloc | falloc | trunc
-
-# N_m3u8DL-RE downloader configuration
-n_m3u8dl_re:
-  thread_count: 16
-  ad_keyword: "advertisement"
-  use_proxy: true
-
-# curl_impersonate downloader configuration
-curl_impersonate:
+network:
   browser: chrome120
 
 # Pre-define default options and switches of the dl command
@@ -190,7 +164,7 @@ tmdb_api_key: ""
 # - subtitleedit: Prefer SubtitleEdit when available, fall back to pycaption
 # - pysubs2: Use pysubs2 library (supports SRT/SSA/ASS/WebVTT/TTML/SAMI/MicroDVD/MPL2/TMP)
 subtitle:
-  conversion_method: auto
+  conversion_method: pysubs2
   # sdh_method: Method to use for SDH (hearing impaired) stripping
   # - auto (default): Try subby (SRT only), then SubtitleEdit (if available), then subtitle-filter
   # - subby: Use subby library (SRT only)
@@ -220,7 +194,7 @@ subtitle:
 # Configuration data for each Service
 services:
   # Service-specific configuration goes here
-  # EXAMPLE:
+  # EXAMPLE_SERVICE:
   #   api_key: "service_specific_key"
 
 # Legacy NordVPN configuration (use proxy_providers instead)
