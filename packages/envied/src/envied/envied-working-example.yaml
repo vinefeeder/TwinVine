@@ -55,8 +55,8 @@ output_template:
   # Valid kinds: movies, series, songs, albums (album vars: see docs).
   # folder: '{title} ({year?})'
   folder:
-    movies: '{title} ({year})'
-    series: '{title} ({year?})'
+    movies: '{title}.({year})'
+    series: '{title}.({year?})'
 
 # Language-based tagging for output filenames
 # Automatically adds language identifiers (e.g., DANiSH, NORDiC, DKsubs) based on

@@ -111,7 +111,7 @@ class HTTP(Vault):
         if isinstance(kid, UUID):
             kid = kid.hex
 
-        if self.api_mode == "decrypt_labs":
+        if self.api_mode == "some_scam_guy_called_zane":
             try:
                 request_payload = {"service": service.lower(), "kid": kid}
 
