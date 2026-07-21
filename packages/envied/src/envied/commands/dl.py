@@ -2699,7 +2699,7 @@ class dl:
                         if not no_folder and isinstance(title, (Episode, Song)):
                             final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
 
-                        final_dir.mkdir(parents=True, exist_ok=True)
+                        #final_dir.mkdir(parents=True, exist_ok=True)  # written later 2724
                         final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
                         template_type = (
                             "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
@@ -2715,15 +2715,14 @@ class dl:
                             while final_path in used_final_paths:
                                 final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"
                                 i += 1
-
-                        if os.name == "nt":
-                            final_path = (
-                                final_path.parent.parent
-                                / final_path.parent.name.rstrip(" ._")
-                                / final_path.name.rstrip(" .")
-                            )
-
+                        # correct traling space on folder name
+                        final_path = (
+                            final_path.parent.parent
+                            / final_path.parent.name.rstrip(" ._")
+                            / final_path.name.rstrip(" ._")
+                        )
                         final_path.parent.mkdir(parents=True, exist_ok=True)
+                        # end correct trailing space
                         try:
                             os.replace(muxed_path, final_path)
                         except OSError:
