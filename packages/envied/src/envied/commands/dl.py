@@ -2716,10 +2716,19 @@ class dl:
                                 final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"
                                 i += 1
 
+                        if os.name == "nt":
+                            final_path = (
+                                final_path.parent.parent
+                                / final_path.parent.name.rstrip(" ._")
+                                / final_path.name.rstrip(" .")
+                            )
+
+                        final_path.parent.mkdir(parents=True, exist_ok=True)
                         try:
                             os.replace(muxed_path, final_path)
                         except OSError:
                             if final_path.exists():
+                                
                                 final_path.unlink()
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
