@@ -391,9 +391,7 @@ class VineFeeder(QWidget):
 
 
     
-    def load_service(self, service_name: str):
-        self.update_batch_file_indicator()
-
+    def load_service(self, service_name: str, text_to_pass=None):
         meta = self.available_services.get(service_name)
         if not meta:
             console.print(f"[{catppuccin_mocha['text2']}]Service {service_name} not found![/]")
@@ -414,19 +412,14 @@ class VineFeeder(QWidget):
             hlg_status = self.available_services_hlg_status[service_name]
             options = self.available_services_options[service_name]
 
-            text = self.search_url_entry.text().strip()
-            text_to_pass = text if text else None
-
             if hasattr(loader_instance, "receive"):
                 if text_to_pass:
                     if "http" in text_to_pass:
                         loader_instance.receive(1, text_to_pass, None, hlg_status, options)
-                        self.clear_search_box()
                         loader_instance.clean_terminal()
                         sys.exit(0)
                     else:
                         loader_instance.receive(3, text_to_pass, None, hlg_status, options)
-                        self.clear_search_box()
                         loader_instance.clean_terminal()
                         sys.exit(0)
                 else:
@@ -621,10 +614,23 @@ class VineFeeder(QWidget):
             sys.exit(0)
 
     def run_load_service_thread(self, service_name):
-        """Start a new thread to load the service."""
-        return lambda: threading.Thread(
-            target=self.load_service, args=(service_name,)
-        ).start()
+        """Return the button handler that loads a service.
+
+        All widget access stays here, on the GUI thread. macOS aborts
+        the process if a Qt widget is touched from a worker thread, so
+        the box is read and cleared here and the thread is handed plain
+        text only.
+        """
+        def handler():
+            self.update_batch_file_indicator()
+            text = self.search_url_entry.text().strip()
+            self.search_url_entry.clear()
+            threading.Thread(
+                target=self.load_service,
+                args=(service_name, text or None),
+            ).start()
+
+        return handler
 
     
 
