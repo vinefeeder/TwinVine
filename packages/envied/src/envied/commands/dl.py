@@ -2718,8 +2718,8 @@ class dl:
                         # correct traling space on folder name
                         final_path = (
                             final_path.parent.parent
-                            / final_path.parent.name.replace('.', sep).rstrip(" ._")
-                            / final_path.name.replace('.', sep).rstrip(" ._")
+                            / final_path.parent.name.rstrip(" ._")
+                            / final_path.name.rstrip(" ._")
                         )
                         final_path.parent.mkdir(parents=True, exist_ok=True)
                         # end correct trailing space
