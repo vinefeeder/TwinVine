@@ -391,6 +391,10 @@ class ISM:
             progress(downloaded="Decrypting", completed=0, total=100)
             session_drm.decrypt(save_path)
             track.drm = None
+            # Decryption can leave a stale encrypted sample-description
+            # (encv) beside the clean one; mkvmerge would then mux the
+            # track as encrypted. Repack to keep only the decoded stream.
+            track.needs_repack = True
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
             progress(downloaded="Decrypting", advance=100)
 

@@ -764,6 +764,11 @@ class HLS:
                         drm.decrypt(file)
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
 
+                # Decryption can leave a stale encrypted sample-description
+                # (encv) beside the clean one; mkvmerge would then mux the
+                # track as encrypted. Repack to keep only the decoded stream.
+                track.needs_repack = True
+
                 events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=decrypted_path)
 
                 return decrypted_path
