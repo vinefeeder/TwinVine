@@ -1,6 +1,6 @@
 service_name: ALL4
 
-options:
+options:   --repack
 
 media_dict:
   Film: 'https://www.channel4.com/categories/film'

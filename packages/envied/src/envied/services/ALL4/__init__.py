@@ -243,6 +243,13 @@ class ALL4(Service):
         tracks = DASH.from_url(self.manifest, self.session).to_tracks(title.language)
         tracks.videos[0].data = data
 
+
+        # All4 video carries a stale encrypted sample entry beside the
+        # decrypted one; repack so mkvmerge does not mux it as encrypted.
+        for video in tracks.videos:
+            video.needs_repack = True
+
+
         # manifest subtitles are sometimes empty even if they exist
         # so we clear them and add the subtitles manually
         tracks.subtitles.clear()
