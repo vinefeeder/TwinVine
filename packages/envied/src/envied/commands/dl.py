@@ -2318,6 +2318,12 @@ class dl:
                                 drm.decrypt(track.path)
                                 if not isinstance(drm, MonaLisa):
                                     has_decrypted = True
+                                    # Decryption can leave a stale encrypted
+                                    # sample-description (encv) beside the clean
+                                    # one; mkvmerge would then mux the track as
+                                    # encrypted. Repack to keep only the decoded
+                                    # stream.
+                                    track.needs_repack = True
                                 events.emit(events.Types.TRACK_REPACKED, track=track)
                             else:
                                 self.log.warning(
