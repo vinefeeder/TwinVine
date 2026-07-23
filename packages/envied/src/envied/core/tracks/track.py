@@ -365,11 +365,6 @@ class Track:
                             progress(downloaded="Decrypting", completed=0, total=100)
                             drm.decrypt(save_path)
                             self.drm = None
-                            # Decryption can leave a stale encrypted
-                            # sample-description (encv) beside the clean one;
-                            # mkvmerge would then mux the track as encrypted.
-                            # Repack to keep only the decoded stream.
-                            self.needs_repack = True
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)
                             progress(downloaded="Decrypted", completed=100)
 
