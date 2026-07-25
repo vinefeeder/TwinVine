@@ -19,7 +19,7 @@ from envied.core.search_result import SearchResult
 from envied.core.service import Service
 from envied.core.titles import Episode, Movie, Movies, Series, Title_T, Titles_T
 from envied.core.tracks import Chapters, Subtitle, Tracks
-from envied.services.MGMP import queries
+from . import queries
 
 
 class MGMP(Service):
