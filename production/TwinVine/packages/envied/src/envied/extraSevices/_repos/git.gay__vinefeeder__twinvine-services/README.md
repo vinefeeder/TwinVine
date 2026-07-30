@@ -1,4 +1,0 @@
-# twinvine-services
-Service scripts
-
-
