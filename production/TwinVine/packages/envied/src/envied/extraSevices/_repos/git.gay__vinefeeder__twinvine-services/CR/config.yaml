@@ -1,0 +1,50 @@
+# Crunchyroll API Configuration
+client:
+  id: "y2arvjb0h0rgvtizlovy"
+  secret: "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2"
+
+# API Endpoints
+endpoints:
+  # Authentication
+  token: "https://www.crunchyroll.com/auth/v1/token"
+
+  # Account
+  account_me: "https://www.crunchyroll.com/accounts/v1/me"
+  multiprofile: "https://www.crunchyroll.com/accounts/v1/{account_id}/multiprofile"
+
+  # Content Metadata
+  series: "https://www.crunchyroll.com/content/v2/cms/series/{series_id}"
+  seasons: "https://www.crunchyroll.com/content/v2/cms/series/{series_id}/seasons"
+  episodes: "https://www.crunchyroll.com/content/v2/cms/objects/{episode_id}"
+  season_episodes: "https://www.crunchyroll.com/content/v2/cms/seasons/{season_id}/episodes"
+  skip_events: "https://static.crunchyroll.com/skip-events/production/{episode_id}.json"
+
+  # Playback
+  playback: "https://cr-play-service.prd.crunchyrollsvc.com/v3/{episode_id}/tv/android_tv/play"
+  #playback_download: "https://cr-play-service.prd.crunchyrollsvc.com/v3/{episode_id}/android/phone/download"
+  playback_delete: "https://cr-play-service.prd.crunchyrollsvc.com/v1/token/{episode_id}/{token}"
+  playback_sessions: "https://cr-play-service.prd.crunchyrollsvc.com/v1/sessions/streaming"
+  license_widevine: "https://cr-license-proxy.prd.crunchyrollsvc.com/v1/license/widevine"
+  license_playready: "https://cr-license-proxy.prd.crunchyrollsvc.com/v1/license/playReady"
+
+  # Discovery
+  search: "https://www.crunchyroll.com/content/v2/discover/search"
+
+# Headers for Android TV client
+headers:
+  user-agent: "Crunchyroll/ANDROIDTV/3.59.0_22338 (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)"
+  accept: "application/json"
+  accept-charset: "UTF-8"
+  accept-encoding: "gzip"
+  connection: "Keep-Alive"
+  content-type: "application/x-www-form-urlencoded; charset=UTF-8"
+
+# Query parameters
+params:
+  locale: "es-419"
+
+# Device parameters for authentication
+device:
+  type: "ANDROIDTV"
+  name: "SHIELD Android TV"
+  model: "SHIELD Android TV"

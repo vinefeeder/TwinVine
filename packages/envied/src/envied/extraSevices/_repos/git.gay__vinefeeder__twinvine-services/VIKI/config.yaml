@@ -1,0 +1,8 @@
+params:
+    app: "100000a"
+endpoints:
+    container: "https://api.viki.io/v4/containers/{container_id}.json"
+    episodes: "https://api.viki.io/v4/series/{container_id}/episodes.json" # New
+    episode_meta: "https://api.viki.io/v4/videos/{video_id}.json" # New
+    playback: "https://www.viki.com/api/videos/{video_id}"
+    search: "https://api.viki.io/v4/search/all.json"

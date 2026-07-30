@@ -1,0 +1,7 @@
+endpoints:
+  base_url: "https://services.radio-canada.ca"
+  validation: "/media/validation/v2?appCode=gem&&deviceType={}&idMedia={}&manifestType={}&output=json&tech={}"
+  api_key: "3f4beddd-2061-49b0-ae80-6f1f2ed65b37"
+
+client:
+  id: "fc05b0ee-3865-4400-a3cc-3da82c330c23"

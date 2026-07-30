@@ -1,0 +1,5 @@
+endpoints:
+  login: "https://prod-sgwv3.kocowa.com/api/v01/user/signin"
+  middleware_auth: "https://middleware.bcmw.kocowa.com/authenticate-user"
+  metadata: "https://prod-fms.kocowa.com/api/v01/fe/content/get?id={title_id}"
+  authorize: "https://middleware.bcmw.kocowa.com/api/playback/authorize/{episode_id}"

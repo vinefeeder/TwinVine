@@ -1,0 +1,25 @@
+headers:
+  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+  Accept: "application/json, text/plain, */*"
+  Accept-Language: "en-IE,en;q=0.9"
+  Origin: "https://play.virginmediatelevision.ie"
+  Referer: "https://play.virginmediatelevision.ie/"
+  X-Requested-With: "XMLHttpRequest"
+
+api:
+  key: "821254297041614280861178657602"
+  company_id: "company_942f683c-9041-42de-9911-a9e4cd98a4e9"
+  country: "IE"
+  platform: "chrome"
+  gdpr: "1"
+  gdpr_consent: "undefined"
+  userid: "123456"
+
+endpoints:
+  base_url: "https://play.virginmediatelevision.ie"
+  search: "https://v6-metadata-cf.simplestreamcdn.com/api/search"
+  token: "https://play.virginmediatelevision.ie/api/player/token/{id}"
+  stream: "https://api-virginmedia.simplestreamcdn.com/streams/v2/{company_id}/vod/{id}"
+  series_metadata:
+    - "https://v6-metadata-cf.simplestreamcdn.com/api/series/{id}"
+    - "https://v6-metadata.simplestreamcdn.com/api/series/{id}"

@@ -1,0 +1,5 @@
+endpoints:
+    content_profile: "https://api.vidio.com/content_profiles/{content_id}"
+    playlists: "https://api.vidio.com/content_profiles/{content_id}/playlists"
+    playlist_videos: "https://api.vidio.com/content_profiles/{content_id}/playlists/{playlist_id}/videos"
+    stream: "https://api.vidio.com/api/stream/v1/video_data/{video_id}?initialize=true"

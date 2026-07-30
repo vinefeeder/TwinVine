@@ -1,0 +1,33 @@
+endpoints:
+  login: "https://mfwkweb-api.clarovideo.net/services/user/login"
+  headerinfo: "https://mfwkweb-api.clarovideo.net/services/user/startheaderinfo"
+  device: "https://mfwkweb-api.clarovideo.net/services/device/list"
+  serie: "https://mfwkweb-api.clarovideo.net/services/content/serie"
+  data: "https://mfwkweb-api.clarovideo.net/services/content/data"
+  media: "https://mfwkweb-api.clarovideo.net/services/player/getmedia"
+  payway: "https://mfwkweb-api.clarovideo.net/services/payway/purchasebuttoninfo"
+  certificate: "https://widevine-claroglobal-vod.clarovideo.net/licenser/getcertificate"
+
+params:
+  device_id: "web"
+  device_category: "web"
+  device_model: "web"
+  device_type: "web"
+  device_so: "Chrome"
+  format: "json"
+  device_manufacturer: "generic"
+  authpn: "webclient"
+  authpt: "tfg1h3j4k6fd7"
+  api_version: "v5.94"
+  HKS: "4nb186umaf9sfkiq2p1oakdeh6"
+
+payway_params:
+  api_version: "v5.94"
+  authpn: "html5player"
+  authpt: "ad5565dfgsftr"
+  format: "json"
+  device_category: "web"
+  device_model: "html5"
+  device_type: "html5"
+  device_so: "Chrome"
+  device_manufacturer: "windows"

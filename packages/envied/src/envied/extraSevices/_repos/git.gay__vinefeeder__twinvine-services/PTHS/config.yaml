@@ -1,0 +1,3 @@
+endpoints:
+  metadata: "https://www.pathe-thuis.nl/api/movies/{movie_id}?include=editions"
+  ticket: "https://www.pathe-thuis.nl/api/tickets/{ticket_id}"

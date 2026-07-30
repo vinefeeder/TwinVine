@@ -1,0 +1,18 @@
+headers:
+  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+  Accept: "application/json, text/plain, */*"
+  Origin: "https://www.9now.com.au"
+  Referer: "https://www.9now.com.au/"
+
+brightcove:
+  account: "4460760524001"
+  policy_key: "BCpkADawqM1TWX5yhWjKdzhXnHCmGvnaozGSDICiEFNRv0fs12m6WA2hLxMHM8TGAEM6pv7lhJsdNhiQi76p4IcsT_jmXdtEU-wnfXhOBTx-cGR7guCqVwjyFAtQa75PFF-TmWESuiYaNTzg"
+
+endpoints:
+  base_url: "https://tv-api.9now.com.au"
+  search: "/v2/pages/search"
+  series: "/v2/pages/tv-series/{series}"
+  season: "/v2/pages/tv-series/{series}/seasons/{season}"
+  season_episodes: "/v2/pages/tv-series/{series}/seasons/{season}/episodes/"
+  episode: "/v2/pages/tv-series/{series}/seasons/{season}/episodes/{episode}"
+  playback: "https://edge.api.brightcove.com/playback/v1/accounts/{account}/videos/{id}"

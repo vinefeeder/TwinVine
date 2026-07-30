@@ -1,0 +1,150 @@
+certificate: |
+  CAUSwgUKvAIIAxIQCuQRtZRasVgFt7DIvVtVHBi17OSpBSKOAjCCAQoCggEBAKU2UrYVOSDlcXajWhpEgGhqGraJtFdUPgu6plJGy9ViaRn5mhyXON5PXm
+  w1krQdi0SLxf00FfIgnYFLpDfvNeItGn9rcx0RNPwP39PW7aW0Fbqi6VCaKWlR24kRpd7NQ4woyMXr7xlBWPwPNxK4xmR/6UuvKyYWEkroyeIjWHAqgCjC
+  mpfIpVcPsyrnMuPFGl82MMVnAhTweTKnEPOqJpxQ1bdQvVNCvkba5gjOTbEnJ7aXegwhmCdRQzXjTeEV2dO8oo5YfxW6pRBovzF6wYBMQYpSCJIA24ptAP
+  /2TkneyJuqm4hJNFvtF8fsBgTQQ4TIhnX4bZ9imuhivYLa6HsCAwEAAToPYW1hem9uLmNvbS1wcm9kEoADETQD6R0H/h9fyg0Hw7mj0M7T4s0bcBf4fMhA
+  Rpwk2X4HpvB49bJ5Yvc4t41mAnXGe/wiXbzsddKMiMffkSE1QWK1CFPBgziU23y1PjQToGiIv/sJIFRKRJ4qMBxIl95xlvSEzKdt68n7wqGa442+uAgk7C
+  XU3uTfVofYY76CrPBnEKQfad/CVqTh48geNTb4qRH1TX30NzCsB9NWlcdvg10pCnWSm8cSHu1d9yH+2yQgsGe52QoHHCqHNzG/wAxMYWTevXQW7EPTBeFy
+  SPY0xUN+2F2FhCf5/A7uFUHywd0zNTswh0QJc93LBTh46clRLO+d4RKBiBSj3rah6Y5iXMw9N9o58tCRc9gFHrjfMNubopWHjDOO3ATUgqXrTp+fKVCmsG
+  uGl1ComHxXV9i1AqHwzzY2JY2vFqo73jR3IElr6oChPIwcNokmNc0D4TXtjE0BoYkbWKJfHvJJihzMOvDicWUsemVHvua9/FBtpbHgpbgwijFPjtQF9Ldb
+  8Swf
+
+dtid_dict: [
+  "A3EFHJ9BGBJ8L2", "A3VN4E5F7BBC7S", "A28RQHJKHM2A2W", "AFOQV1TK6EU6O","A1IJNVP3L4AY8B", "A2Z1NVLU6LCAUO",
+  "A2E50Q8IVZ79QG", "A17PYKRA4ES6YB", "AFRP7VQQ7US69", "A2VZ790DVVI91K", "A2IK56KYGDHUVQ", "A1EXS4KWCX7GYC",
+  "ANSTXZRNSPRXT", "A1KF4O3GA2MPZU", "A2XEBUI9EJ55OK", "A7YWW3KUHA54O", "A3DOA4P2WFIK9D", "ABJRG3JXAY5JL",
+  "AI00TLC8V1PCT", "A2YWQEZX3UC3J1", "AM08S97P8ESGT", "A234HDVPYTUVNS", "AJ3B6LDE2HP5J", "A2GZIBBOG0DCV4",
+  "A3MEKX9EL7SW8T", "A1GXILNJBV9CU7", "ANHPQG9GCMO4A", "A2CBAN119017AE", "A3FO6QR7E7PFQX", "A27OOP63XLO9TI",
+  "A2EOVT31LL6KPV", "A1FNA83TYYU3QK", "A3JB7490MR9K86", "A2TIAYXTNQWU3T", "ADP5BND5THPTX", "A1H8RTR0E3Y362",
+  "AUNIXHOL9EVMI", "AZKAGPPWORIRY", "A324X3KDTS7NYA", "A390CW53E1P0G4", "A2D0X18EHNKEOJ", "A3JN21B5ZOWUAN",
+  "A1TG8VNKP4DSQR", "A2XZMRZUFPEDN4", "A2LJ4A527WOX9J", "A2RJLFEH0UEKI9", "AE5DW8GVLP9NX", "AIE8AMJ60B7OK",
+  "A3ZKCWKG4097P", "A2H1I0AR67NWAC", "A3QXXOBP9MU5LY", "A25521KS9QCAMD", "AGQHFIWNI20PO", "A27XSKZJJPVQA4",
+  "A1LCAPNEM1C36Z", "A31POKKHZJR1J4", "AOLDXB6WYN0UM", "A3SSWQ04XYPXBH", "A1BSQJM6E77NJE", "A2TX61L00VISA5",
+  "AO4A5QLO9663Q", "A15MU3EQ4XZ3Y5", "A3IWJ2DYJQRA3T", "A1Q878J3NE8P81", "AAJB0R7QJO84W", "A2M1CHUCI6RHN8",
+  "A6IUL9CVJZXRR", "A2RGJ95OVLR12U", "A1G2XVSR1VA5DI", "A1S15DUFSI8AUG", "ALYWZPYF4JAIT", "A2M4YX06LWP8WI",
+  "A2O85NMVNLPKVN", "A3L0T0VL9A921N", "A1J16TEDOYCZTN", "A1Q7QCGNMXAKYW", "A38EHHIB10L47V", "A3R9S4ZZECZ6YL",
+  "A1C66CX2XD756O", "A1ZB65LA390I4K", "AVU7CPPF2ZRAS", "ATNLRCEBX3W4P", "A2N49KXGVA18AR", "A271DR1789MXDS",
+  "A1TD5Z1R8IWBHA", "A1DOD0Z74XEFYC", "A17AIVOKIKR4QQ", "A1S310WB67VFPY", "A2QCPPMSOLGVZE", "A1NPAGU1M4PA7Z",
+  "A3ORLONYQTBTOZ", "A3M7PA8JXKE627", "A71I8788P1ZV8", "A2V9UEGZ82H4KZ", "A3URJAABOST7NW", "A2E0SNTXJVT7WK",
+  "ADVBD696BHNV5", "A12GXV8XMS007S", "A2LWARUGJLBYEW", "A2GFL5ZMWNE0PX", "AKPGW064GI9HE", "A3HF4YRA2L7XGC",
+  "AGHZIK8D6X7QR", "A1F8D55J0FWDTN", "A1P7E7V3FCZKU6", "A1NL4BVLQ4L3N3", "A10A33FOX2NUBK", "AWZZ5CVHX2CD",
+  "A4ZP7ZC4PI6TO", "A1Z88NGR2BK6A2", "A2MDL5WTJIU8SZ", "AP4RS91ZQ0OOI", "AFF5OAL5E3DIU", "A2HYAJ0FEWP6N3",
+  "A3SUJTTQGF9GNF", "A346DYAAR4WSNS", "A93SQJNJQLDSS", "A2JKHJ0PX4J3L3", "A2WJI2JG7UW2O1", "ARJHEDRXLP6DM",
+  "A1AGU0A4YA5RF9", "A2WV8TTM37P2CB", "AN630UQPG2CA4", "A30OJ8LMIAF6GP", "A8MCGN45KMHDH", "A33S43L213VSHQ",
+  "A2NYIDFQSJW39B", "A31DTMEEVDDOIV", "A2FDUYD6UQ1BQ", "A3MTL1JKF2IXY3", "AK6OCP5ZLUJI1", "A3JTVZS31ZJ340",
+  "A43PXU4ZN2AL1", "A1OTX5GMM5144Z", "A2Z1NVLU6LCAUO", "A43PXU4ZN2AL1", "A1OTX5GMM5144Z", "A2Z1NVLU6LCAUO",
+  "A2SNKIF736WF4T"
+]
+
+device:
+  default:
+    manufacturer: WV
+    device_chipset: MediaTek
+    domain: Device
+    app_name: AIV
+    os_name: Android
+    app_version: '3.19.5'
+    device_model: WV_ELPTK514KT22_541264
+    os_version: '9'
+    device_serial: '95047855cf573479341d134104cfa312'
+    device_type: A2SNKIF736WF4T
+    device_name: "Zos Android TV"
+    software_version: '248'
+    firmware: 'Android 9'
+    firmware_version: '9.0 | Android | TV | armeabi-v7a | CE CDM 14.0.0'
+    user_agent: 'Dalvik/2.1.0 (Linux; U; Android 9; WV_ELPTK514KT22_541264 Build/PPR1.180610.011)'
+
+device_types:
+  browser: 'AOAGZA014O5RE'
+  tv_generic: 'A2SNKIF736WF4T'
+  pc_app: 'A1RTAM01W29CUP'
+  mobile_app: 'A43PXU4ZN2AL1'
+  echo: 'A7WXQPH584YP'
+  echo_dot: 'A32DOYMUN6DTXA'
+  echo_studio: 'A3RBAYBE7VM004'
+  fire_7: 'A2M4YX06LWP8WI'
+  fire_hd_8: 'A1C66CX2XD756O'
+  fire_hd_8_plus_2020: 'AVU7CPPF2ZRAS'
+  fire_hd_10: 'A1ZB65LA390I4K'
+  fire_tv: 'A2E0SNTXJVT7WK'
+  fire_tv_gen2: 'A12GXV8XMS007S'
+  fire_tv_cube: 'A2JKHJ0PX4J3L3'
+  fire_tv_stick_gen1: 'ADVBD696BHNV5'
+  fire_tv_stick_gen2: 'A2LWARUGJLBYEW'
+  fire_tv_stick_4k: 'A2GFL5ZMWNE0PX'
+  fire_tv_stick_4k_gen3: 'AKPGW064GI9HE'
+  nvidia_shield: 'A1KAXIG6VXSG8Y'
+
+endpoints:
+  configuration: '/acm/GetConfiguration/WebClient'
+  details: '/gp/video/api/getDetailPage'
+  getDetailWidgets: '/gp/video/api/getDetailWidgets'
+  playback: '/playback/prs/GetVodPlaybackResources'
+  metadata: '/api/enrichItemMetadata'
+  refreshplayback: '/playback/tags/getRefreshedPlaybackEnvelope'
+  license_wv: '/playback/drm-vod/GetWidevineLicense'
+  license_pr: '/playback/drm-vod/GetPlayReadyLicense'
+  opensession: '/cdp/playback/pes/StartSession'
+  updatesession: '/cdp/playback/pes/UpdateSession'
+  closesession: '/cdp/playback/pes/StopSession'
+  xray: '/swift/page/xray'
+  ontv: '/gp/video/ontv/code'
+  devicelink: '/gp/video/api/codeBasedLinking'
+  codepair: '/auth/create/codepair'
+  register: '/auth/register'
+  token: '/auth/token'
+
+regions:
+  us:
+    base: 'www.amazon.com'
+    base_api: 'api.amazon.com'
+    base_manifest: 'atv-ps.amazon.com'
+    marketplace_id: 'ATVPDKIKX0DER'
+
+  fr:
+    base: 'www.amazon.fr'
+    base_api: 'api.amazon.fr'
+    base_manifest: 'atv-ps-eu.primevideo.com'
+    marketplace_id: 'A13V1IB3VIYZZH'
+
+  gb:
+    base: 'www.amazon.co.uk'
+    base_api: 'api.amazon.co.uk'
+    base_manifest: 'atv-ps-eu.amazon.co.uk'
+    marketplace_id: 'A1F83G8C2ARO7P'  # A2IR4J4NTCP2M5
+
+  es:
+    base: 'www.amazon.es'
+    base_api: 'api.amazon.es'
+    base_manifest: 'atv-ps-eu.primevideo.com'
+    marketplace_id: 'A1RKKUPIHCS9HS'
+
+  it:
+    base: 'www.amazon.it'
+    base_api: 'api.amazon.it'
+    base_manifest: 'atv-ps-eu.primevideo.com'
+    marketplace_id: 'A3K6Y4MI8GDYMT'
+
+  de:
+    base: 'www.amazon.de'
+    base_api: 'api.amazon.de'
+    base_manifest: 'atv-ps-eu.amazon.de'
+    marketplace_id: 'A1PA6795UKMFR9'
+
+  au:
+    base: 'www.amazon.com.au'
+    base_api: 'api.amazon.com.au'
+    base_manifest: 'atv-ps-fe.amazon.com.au'
+    marketplace_id: 'A3K6Y4MI8GDYMT'
+
+  jp:
+    base: 'www.amazon.co.jp'
+    base_api: 'api.amazon.co.jp'
+    base_manifest: 'atv-ps-fe.amazon.co.jp'
+    marketplace_id: 'A1VC38T7YXB528'
+
+  pl:
+    base: 'www.amazon.com'
+    base_api: 'api.amazon.com'
+    base_manifest: 'atv-ps-eu.primevideo.com'
+    marketplace_id: 'A3K6Y4MI8GDYMT'

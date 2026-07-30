@@ -1,0 +1,18 @@
+endpoints:
+  gigya_login: "https://accounts.eu1.gigya.com/accounts.login"
+  vrt_sso: "https://www.vrt.be/vrtmax/sso/login"
+  graphql: "https://www.vrt.be/vrtnu-api/graphql/v1"
+  player_token: "https://media-services-public.vrt.be/vualto-video-aggregator-web/rest/external/v2/tokens"
+  aggregator: "https://media-services-public.vrt.be/media-aggregator/v2/media-items/{stream_id}"
+  license: "https://widevine-proxy.drm.technology/proxy"
+
+settings:
+  api_key: "3_qhEcPa5JGFROVwu5SWKqJ4mVOIkwlFNMSKwzPDAh8QZOtHqu6L4nD5Q7lk0eXOOG"
+  client_name: "WEB"
+  client_id: "vrtnu-web@PROD"
+  client_version: "1.5.15"
+
+player_info:
+  drm: { widevine: "L3" }
+  platform: "desktop"
+  app: { type: "browser", name: "Firefox", version: "146.0" }

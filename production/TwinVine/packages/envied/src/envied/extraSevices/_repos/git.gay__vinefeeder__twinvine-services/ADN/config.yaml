@@ -1,0 +1,29 @@
+# API Configuration
+
+# API Endpoints
+endpoints:
+  # Authentication
+  login: "https://gw.api.animationdigitalnetwork.com/authentication/login"
+  refresh: "https://gw.api.animationdigitalnetwork.com/authentication/refresh"
+
+# Catalog
+  search: "https://gw.api.animationdigitalnetwork.com/show/catalog"
+  show: "https://gw.api.animationdigitalnetwork.com/video/show/{show_id}?maxAgeCategory=18&limit=-1&order=asc"
+  seasons: "https://gw.api.animationdigitalnetwork.com/video/show/{show_id}/seasons?maxAgeCategory=18&order=asc"
+
+# Player & Playback
+  player_config: "https://gw.api.animationdigitalnetwork.com/player/video/{video_id}/configuration"
+  player_refresh: "https://gw.api.animationdigitalnetwork.com/player/refresh/token"
+  player_links: "https://gw.api.animationdigitalnetwork.com/player/video/{video_id}/link"
+
+# Default Headers
+headers:
+  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  Origin: "https://animationdigitalnetwork.com"
+  Referer: "https://animationdigitalnetwork.com/"
+  Content-Type: "application/json"
+  X-Target-Distribution: "fr"
+
+# Parameters
+params:
+  locale: "fr"

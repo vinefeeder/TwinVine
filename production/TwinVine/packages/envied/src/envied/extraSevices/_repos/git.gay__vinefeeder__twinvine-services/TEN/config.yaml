@@ -1,0 +1,9 @@
+headers:
+  User-Agent: 10play/7.4.0.500325 Android UAP
+
+endpoints:
+  config: https://10.com.au/api/v1/config
+  auth: https://10.com.au/api/user/auth
+  query: https://vod.ten.com.au/api/videos/bcquery # androidapps-v2
+  
+api_key: "b918ff793563080c5821c89ee6c415c363cb36d369db1020369ac4b405a0211d"

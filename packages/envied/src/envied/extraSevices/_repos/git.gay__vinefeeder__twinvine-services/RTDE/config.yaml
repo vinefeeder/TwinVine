@@ -1,0 +1,12 @@
+headers:
+  user-agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+graphql_url: "https://cdn.gateway.now-plus-prod.aws-cbc.cloud/graphql"
+playout_url: "https://stus.player.streamingtech.de/watch-playout-variants"
+auth_url: "https://auth.rtl.de/auth/realms/rtlplus"
+
+graphql_hashes:
+  Format: "d112638c0184ab5698af7b69532dfe2f12973f7af9cb137b9f70278130b1eafa"
+  SeasonWithFormatAndEpisodes: "cc0fbbe17143f549a35efa6f8665ceb9b1cfae44b590f0b2381a9a304304c584"
+  Episode: "87dbde15a0d269b11606f5ff458d555e98eb493bb4fb6ddc150d812d5e9a9cf8"
+  EpisodeDetail: "2e5ef142c79f8620e8e93c8f21b31a463b16d89a557f7f5f0c4a7e063be96a8a"

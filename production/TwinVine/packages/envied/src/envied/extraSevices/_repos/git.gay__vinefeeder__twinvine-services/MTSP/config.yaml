@@ -1,0 +1,8 @@
+headers:
+  Accept-Language: de-DE,de;q=0.8
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0
+
+endpoints:
+  login_form: https://www.magentasport.de/service/auth/web/login?headto=https://www.magentasport.de/home
+  login_post: https://accounts.login.idm.telekom.com/factorx
+  video_config: https://www.magentasport.de/service/player/v2/videoConfig?videoid={video_id}&partnerid=0&language=de&format=iphone&device=desktop&platform=web&cdn=telekom_cdn&userType=loggedin-entitled

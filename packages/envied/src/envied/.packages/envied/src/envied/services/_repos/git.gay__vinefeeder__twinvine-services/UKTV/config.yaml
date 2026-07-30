@@ -1,0 +1,9 @@
+headers:
+  BCOV-POLICY: BCpkADawqM2ZEz-kf0i2xEP9VuhJF_DB5boH7YAeSx5EHDSNFFl4QUoHZ3bKLQ9yWboSOBNyvZKm4HiZrqMNRxXm-laTAnmls1QOL7_kUM3Eij4KjQMz0epMs3WIedg64fnRxQTX6XubGE9p
+  User-Agent: Dalvik/2.1.0 (Linux; U; Android 12; SM-A226B Build/SP1A.210812.016)
+  Host: edge.api.brightcove.com
+  Connection: keep-alive
+
+endpoints:
+  base: https://vschedules.uktv.co.uk/vod/
+  playback: https://edge.api.brightcove.com/playback/v1/accounts/1242911124001/videos/{id}

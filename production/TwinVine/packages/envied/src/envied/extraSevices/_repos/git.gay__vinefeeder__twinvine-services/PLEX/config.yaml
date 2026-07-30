@@ -1,0 +1,12 @@
+headers:
+  User-Agent: Mozilla/5.0 (Linux; Android 11; Smart TV Build/AR2101; wv)
+
+endpoints:
+  base_url: https://vod.provider.plex.tv
+  user: https://plex.tv/api/v2/users/anonymous
+  screen: https://luma.plex.tv/api/screen
+  provider: provider://tv.plex.provider.vod
+  manifest_clear: /library/parts/{}?includeAllStreams=1&X-Plex-Product=Plex+Mediaverse&X-Plex-Token={}
+  manifest_drm: /library/parts/{}?includeAllStreams=1&X-Plex-Product=Plex+Mediaverse&X-Plex-Token={}&X-Plex-DRM=widevine
+  license: /library/parts/{}/license?X-Plex-Token={}&X-Plex-DRM=widevine
+  

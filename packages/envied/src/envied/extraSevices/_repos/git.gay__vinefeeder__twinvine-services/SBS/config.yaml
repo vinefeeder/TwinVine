@@ -1,0 +1,10 @@
+headers:
+  User-Agent: "okhttp/4.10.0"
+  x-api-key: "ce3f270a-31fb-486e-855e-4f608a62640e" # mobile: "325a2c15-17ad-48d7-802e-87e8ffe0e6fe", web: 49a46461-b9eb-4904-b519-176c59c386ef
+
+endpoints:
+  base_url: "https://www.sbs.com.au"
+  playback: "https://playback.pr.sbsod.com/stream"
+  catalogue: "https://catalogue.pr.sbsod.com"
+  auth: "https://auth.sbs.com.au/login"
+  refresh: "https://auth.sbs.com.au/refresh"

@@ -1,0 +1,27 @@
+headers:
+  Accept-Language: en-US,en;q=0.8
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.75 Safari/537.36
+
+endpoints:
+  login: https://api.channel4.com/online/v2/auth/token
+  title: https://api.channel4.com/online/v1/views/content-hubs/{title}.json
+  license: https://c4.eme.lp.aws.redbeemedia.com/wvlicenceproxy-service/widevine/acquire
+  search: https://all4nav.channel4.com/v1/api/search
+
+android:
+  key: QVlESUQ4U0RGQlA0TThESA=="
+  iv: MURDRDAzODNES0RGU0w4Mg=="
+  auth: MzZVVUN0OThWTVF2QkFnUTI3QXU4ekdIbDMxTjlMUTE6Sllzd3lIdkdlNjJWbGlrVw==
+  vod: https://api.channel4.com/online/v1/vod/stream/{video_id}?client=android-mod
+
+web:
+  key: bjljTGllWWtxd3pOQ3F2aQ==
+  iv: b2R6Y1UzV2RVaVhMdWNWZA==
+  vod: https://www.channel4.com/vod/stream/{programmeId}
+
+device:
+  platform_name: android
+  device_type: mobile
+  device_name: "Sony C6903 (C6903)"
+  app_version: "android_app:9.4.2"
+  optimizely_datafile: "2908"

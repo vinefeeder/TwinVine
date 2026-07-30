@@ -109,7 +109,8 @@ directories:
   prds: PRDs
   services:
     - https://git.gay/vinefeeder/twinvine-services.git
-      # ./packages/envied/src/envied/services ## local user services
+    # - ./packages/envied/src/envied/extraSevices
+    # - ./packages/envied/src/envied/services ## local user services
 
 
 # Pre-define which Widevine or PlayReady device to use for each Serviceuv run envied

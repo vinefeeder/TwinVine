@@ -1,0 +1,5 @@
+endpoints:
+  content: https://uapi.adrise.tv/cms/content # https://content-cdn.production-public.tubi.io/api/v2/content
+  search: https://search.production-public.tubi.io/api/v2/search
+
+  

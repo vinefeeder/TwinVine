@@ -1,0 +1,30 @@
+headers:
+  x-device-type: "androidtv"
+  x-app-store-type: "androidtv"
+  x-client-id: "tvnz-tvnz-androidtv"
+  user-agent: "Dalvik/2.1.0 (Linux; U; Android 11; Android TV Build/RTMA.250416.082)"
+
+endpoints:
+  authorize: "https://watch-cdn.edge-api.tvnz.co.nz/media/content/authorize"
+  register: "https://watch-cdn.edge-api.tvnz.co.nz/device/app/register"
+  refresh: "https://rest-prod-tvnz.evergentpd.com/tvnz/refreshToken"
+  catalog: "https://data-store-cdn.cms-api.tvnz.co.nz/content/urn/resource/catalog"
+  seasons: "https://data-store-cdn.cms-api.tvnz.co.nz/content/series/{series_id}/seasons"
+  episodes: "https://data-store-cdn.cms-api.tvnz.co.nz/content/series/{series_id}/episodes"
+  entitlements: "https://rest-prod-tvnz.evergentpd.com/tvnz/getEntitlements"
+  contact: "https://rest-prod-tvnz.evergentpd.com/tvnz/getContact"
+  oauth: "https://watch-cdn.edge-api.tvnz.co.nz/oauth2/token"
+  search: "https://search-cdn.cms-api.tvnz.co.nz/content/search"
+
+web_client:
+  client_id: "webclient-ui-app"
+  client_secret: "f99d00b8-5b20-4c27-983d-d2895f3e9fec"
+
+androidtv_client:
+   client_id: "android-ui-app"
+   client_secret: "dcb2b779-1cf8-4672-81ed-8ee1a8345389"
+
+contact:
+  channelPartnerID: "TVNZ_NZ"
+  apiUser: "qpapiuser"
+  apiPassword: "Tv9z@pi2026$"

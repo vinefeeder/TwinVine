@@ -1,0 +1,16 @@
+# Logins go in envied.yaml credentials and are formatted as: (email:password) or (token:X-User-Auth-Token)
+# Format IDs: 5 = MP3 320 | 6 = FLAC 16-bit/44.1kHz | 7 = FLAC 24-bit ≤96kHz | 27 = FLAC 24-bit ≤192kHz
+
+user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+
+base_url: 'https://www.qobuz.com/api.json/0.2/'
+web_url: 'https://play.qobuz.com'
+
+app_id: 
+  - '798273057'
+secrets:
+  - 'abb21364945c0583309667d13ca3d93a'
+  - '806331c3b0b641da923b890aed01d04a'
+  - 'f69a7734686cb9427629378a4b7ac381'
+
+default_format_id: 27

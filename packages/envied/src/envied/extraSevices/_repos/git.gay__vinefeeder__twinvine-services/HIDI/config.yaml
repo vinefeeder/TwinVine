@@ -1,0 +1,10 @@
+x_api_key: "857a1e5d-e35e-4fdf-805b-a87b6f8364bf"
+x_app_var: "6.59.1.e16cdfd"
+
+endpoints:
+  init: "https://dce-frontoffice.imggaming.com/api/v1/init/"
+  login: "https://dce-frontoffice.imggaming.com/api/v2/login"
+  vod: "https://dce-frontoffice.imggaming.com/api/v4/vod/{vod_id}?includePlaybackDetails=URL"
+  adjacent: "https://dce-frontoffice.imggaming.com/api/v4/vod/{vod_id}/adjacent"
+  view: "https://dce-frontoffice.imggaming.com/api/v1/view"  # Changed from season_view
+  refresh: "https://dce-frontoffice.imggaming.com/api/v2/token/refresh"

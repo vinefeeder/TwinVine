@@ -1,0 +1,11 @@
+endpoints:
+  base_url: "https://www.todtv.com.tr"
+  play_request: "https://www.todtv.com.tr/content/playRequest"
+  license_castleblack: "https://castleblack.digiturk.com.tr/api/widevine/license?version=1.0"
+
+fallback_types:
+  - diziler
+  - dizi
+  - tod-studios
+  - bein-series
+  - belgesel

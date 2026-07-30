@@ -1,0 +1,10 @@
+endpoints:
+  portalplayer: https://player.pbs.org/portalplayer/
+  urs: https://urs.pbs.org/redirect/
+  show_content: https://content.services.pbs.org/v3/pbsorg/screens/shows/
+  show_episodes: https://www.pbs.org/api/show/{show_slug}/season/{season_cid}/episodes/
+  show_specials: https://www.pbs.org/api/show/{show_slug}/specials/
+
+client:
+  web:
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"

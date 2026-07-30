@@ -1,0 +1,16 @@
+headers:
+  user-agent: "Dalvik/2.1.0 (Linux; U; Android 11; SHIELD Android TV Build/RQ1A.210105.003)"
+
+endpoints:
+  graphql: "https://rte-api.bellmedia.ca/graphql"
+  login: "https://account.bellmedia.ca/api/login/v2.2"
+  account: "https://account.bellmedia.ca/api/account/v1.1"
+  profile: "https://account.bellmedia.ca/api/profile/v2/account/{}"
+  contents: "https://playback.rte-api.bellmedia.ca/contents/{}"
+  destination: "https://stream.video.9c9media.com/meta/content/{}/contentpackage/{}/destination/{}/platform/1"
+  widevine: "https://license.9c9media.com/widevine"
+  playready: "https://license.9c9media.com/playready"
+
+auth:
+  android: "Y3JhdmUtYW5kcm9pZDpkZWZhdWx0"
+  web: "Y3JhdmUtd2ViOmRlZmF1bHQ="

@@ -1,0 +1,71 @@
+certificate: |
+  CAUSxwUKwQIIAxIQFwW5F8wSBIaLBjM6L3cqjBiCtIKSBSKOAjCCAQoCggEBAJntWzsyfateJO/DtiqVtZhSCtW8yzdQPgZFuBTYdrjfQFEEQa2M462xG
+  7iMTnJaXkqeB5UpHVhYQCOn4a8OOKkSeTkwCGELbxWMh4x+Ib/7/up34QGeHleB6KRfRiY9FOYOgFioYHrc4E+shFexN6jWfM3rM3BdmDoh+07svUoQyk
+  dJDKR+ql1DghjduvHK3jOS8T1v+2RC/THhv0CwxgTRxLpMlSCkv5fuvWCSmvzu9Vu69WTi0Ods18Vcc6CCuZYSC4NZ7c4kcHCCaA1vZ8bYLErF8xNEkKd
+  O7DevSy8BDFnoKEPiWC8La59dsPxebt9k+9MItHEbzxJQAZyfWgkCAwEAAToUbGljZW5zZS53aWRldmluZS5jb20SgAOuNHMUtag1KX8nE4j7e7jLUnfS
+  SYI83dHaMLkzOVEes8y96gS5RLknwSE0bv296snUE5F+bsF2oQQ4RgpQO8GVK5uk5M4PxL/CCpgIqq9L/NGcHc/N9XTMrCjRtBBBbPneiAQwHL2zNMr80
+  NQJeEI6ZC5UYT3wr8+WykqSSdhV5Cs6cD7xdn9qm9Nta/gr52u/DLpP3lnSq8x2/rZCR7hcQx+8pSJmthn8NpeVQ/ypy727+voOGlXnVaPHvOZV+WRvWC
+  q5z3CqCLl5+Gf2Ogsrf9s2LFvE7NVV2FvKqcWTw4PIV9Sdqrd+QLeFHd/SSZiAjjWyWOddeOrAyhb3BHMEwg2T7eTo/xxvF+YkPj89qPwXCYcOxF+6gjo
+  mPwzvofcJOxkJkoMmMzcFBDopvab5tDQsyN9UPLGhGC98X/8z8QSQ+spbJTYLdgFenFoGq47gLwDS6NWYYQSqzE3Udf2W7pzk4ybyG4PHBYV3s4cyzdq8amvtE/sNSdOKReuHpfQ=
+
+gdpr_consent: |
+  CPGeIEAPV65UAADABBNLCGCsAP_AAH_AAAAAHrsXZCpcBSlgYCpoAIoAKIAUEAAAgyAAABAAAoABCAAAIAQAgAAgIAAAAAAAAAAAIAJAAQAAAAEAAAAAAA
+  AAAAAIIACAAAAAIABAAAAAAAAACAAAAAAAAAAAAAAEAAAAgABAABAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAgZ8xdkKlwFKWBgKGgAigAogBQQAACDIAAA
+  EAACAAAIAAAgBACAACAAAAAAAAAAAAAgAgABAAAAAQAAAAAAAAAAAAggAAAAAAAgAEAAAAAAAAAAAAAAAAAAAAAAAAQAAACAAEAAEAAAAAAQAA.YAAAAAAAA8DA
+
+endpoints:
+  title: https://gizmo.rakuten.tv/v3/movies/{title_id}?
+  show: https://gizmo.rakuten.tv/v3/seasons/{title_id}?
+  manifest: https://gizmo.rakuten.tv/v3/{kind}/streamings?
+  auth: https://gizmo.rakuten.tv/v3/me/login_or_wuaki_link
+clients:
+  web:
+    app_version: v3.0.11
+    device_identifier: web
+    device_serial: 6cc3584a-c182-4cc1-9f8d-b90e4ed76de9
+    player: web:DASH-CENC:WVM
+    device_os: Windows 10
+    device_model: GENERIC
+    device_year: 2019
+    device_brand: chrome
+    device_sdk: 100.0.4896
+  android:
+    app_version: 3.22.0
+    device_identifier: android
+    device_serial: 3187ad6c-4d1c-4cbb-9c59-8396d054eb2a
+    player: android:DASH-CENC
+    device_os: Android
+    device_model: SM-A105FN
+    device_year: 2021
+    device_brand: Samsung
+    device_sdk: ""
+  atvui40:
+    app_version: v2.77.0
+    device_identifier: atvui40
+    device_serial: 0424814603535001d1b1
+    player: atvui40:DASH-CENC:WVM
+    device_os: Android TV UI 40
+    device_model: SHIELD Android TV
+    device_year: 1970
+    device_brand: NVIDIA
+    device_sdk: ""
+  lgui40:
+    app_version: v2.77.0
+    device_identifier: lgui40
+    device_serial: 203WRMD8U920
+    player: lgui40:DASH-CENC:PR
+    device_os: LG UI 40
+    device_model: OLED65C11LB
+    device_year: 2021
+    device_brand: LG
+    device_sdk: ""
+  smui40:
+    app_version: v2.77.0
+    device_identifier: smui40
+    device_serial: 6cc3584a-c182-4cc1-9f8d-b90e4ed76de9
+    player: smtvui40:DASH-CENC:WVM
+    device_os: Samsung UI 40
+    device_model: QE43Q60RATXXH
+    device_year: 2019
+    device_brand: Samsung
+    device_sdk: ""

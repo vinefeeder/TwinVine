@@ -1,0 +1,53 @@
+headers:
+  user-agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"
+  origin: "https://www.philo.com"
+  referer: "https://www.philo.com/"
+  accept: "*/*"
+  accept-language: "en-US,en;q=0.9"
+
+request_timeout: 30
+ccextract: 0 # 1
+
+endpoints:
+  graphql: "https://www.philo.com/graphql"
+  user: "https://www.philo.com/user"
+  profiles: "https://www.philo.com/user/profiles/list.json"
+  geo: "https://content-us-east-2-fastly-b.www.philo.com/geo"
+  widevine_license: "https://lic.drmtoday.com/license-proxy-widevine/cenc/"
+
+persisted_queries:
+  createPlaybackSessionV2: "2ef315fa06929d36f1a1b332f3a46fe4edf296ad5f13491eb0329b55c06ac432"
+  registerPlayerV2: "8312f5c234270aa2de0f199e79667ca23e41ac6e23d8f4bc31d3007702fbe9a9"
+  endPlaybackSession: "3d4ae806437944478011172aac5dffb92f59cece3670b635f8246fc2d6f1100d"
+  sessionStatus: "6b3d0f3dbb1ef4870d38442103b1cc73a11ba3915fd93457503d6494ca6ebe34"
+  userSubscription: "990a8b451f87cf3cca1ce78ae3895ebc12c87f5082f48d61249ab086e2b68c10"
+  nextPresentations: "c0b92cd127fc00d9b837ecda68f72ff42666628e60591748dc554c1ad749f1c2"
+  previousPresentation: "c6438f893682924f68e5c8974a2cf383d5470a80fc872e12208521ae8e4b4e2e"
+  page: "0dccb4f56182daa1949f520f9d151e8af0b1e7b55a6fcad85cc4a98991ca1ad5"
+  tileGroup: "f976fca086cd18496de0d4b92eed6c961ac1139c139cbc47f901e0f68e451115"
+  tiles: "a4d626992eeede79db8afc3c7d5025af1259379f5a5f5821094e99596b553102"
+  hasFollow: "5706102469c7213170c799f5bc106904b038d9ff2d525a0d0ddd5b63cdf12c3f"
+  preferences: "6bf97e2467f3b8d1fd038e0a8cc717f6dfd3d243c5bcc33fe456999a2c2ddacb"
+  notifications: "71541212b5a04cbef9f483e81c38b6469010c18e4c34dfc1634d48af6a50541c"
+  fetchRemotePlayers: "b1abf2e8cf3bafe4e3db7ed5c53821abe2ee46d018f4aef14111ef29b8d60c24"
+  assignExperiment: "64e8cfaf6a2f468aae6fe2aa7480ab158a0fe0ec8a3570bbbff7fff0435da111"
+  clickTile: "2303363eb24a09b6a8bc52682f7f251f2d41b6e0f5659390358d386599ae6dfe"
+  UpdatePlayheadV2: "b28b78473f96bc3ea19f64913486264784517f022a206ef6e0370f1e914bc377"
+  partnerActivationDetails: "ce5020ab7475567b48600be5d7c852c15ecf4934b7313e5db002187920e7abc0"
+  userSubscriptionQuery: "861aaf9e182476668c8f67356943670484bf9e1d684b11e2139c4997827deef0"
+
+player:
+  deviceType: "WEB"
+  deviceIcon: "PHONE"
+  deviceName: "Firefox on Windows"
+  deviceModel: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"
+  deviceManufacturer: ""
+  applicationVersion: "2026.7.23-1386250"
+  osVersion: "153.0.0"
+  captionsEnabled: false
+  volume: 0.75
+  properties:
+    - name: "supportsChunkLoading"
+      value: "true"
+
+certificate: null
