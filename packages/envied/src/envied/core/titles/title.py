@@ -61,9 +61,7 @@ class Title:
         returned dict with their specific fields (e.g., season/episode).
         """
         primary_video_track = next(iter(media_info.video_tracks), None)
-        original_lang_tag = (
-            str(self.language).split("-")[0].lower() if self.language else ""
-        )
+        original_lang_tag = str(self.language).split("-")[0].lower() if self.language else ""
         primary_audio_track = None
         if original_lang_tag:
             primary_audio_track = next(
@@ -76,7 +74,8 @@ class Title:
             )
         if primary_audio_track is None:
             primary_audio_track = next(iter(media_info.audio_tracks), None)
-        unique_audio_languages = len({x.language.split("-")[0] for x in media_info.audio_tracks if x.language})
+        audio_lang_bases = {x.language.split("-")[0].lower() for x in media_info.audio_tracks if x.language}
+        unique_audio_languages = len(audio_lang_bases)
 
         context: dict[str, Any] = {
             "source": self.service.__name__ if show_service else "",
@@ -90,6 +89,7 @@ class Title:
             "atmos": "",
             "dual": "",
             "multi": "",
+            "dubbed": "",
             "video": "",
             "hdr": "",
             "hfr": "",
@@ -170,9 +170,7 @@ class Title:
                 channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
                 channels = float(channel_count)
 
-            has_atmos = any(
-                "JOC" in (t.format_additionalfeatures or "") or t.joc for t in media_info.audio_tracks
-            )
+            has_atmos = any("JOC" in (t.format_additionalfeatures or "") or t.joc for t in media_info.audio_tracks)
 
             context.update(
                 {
@@ -183,15 +181,15 @@ class Title:
                 }
             )
 
-        if unique_audio_languages == 2:
-            context["dual"] = "DUAL"
-            context["multi"] = ""
-        elif unique_audio_languages > 2:
-            context["dual"] = ""
+        strict = config.dual_multi_mode != "count"
+        if unique_audio_languages > 2:
             context["multi"] = "MULTi"
-        else:
-            context["dual"] = ""
-            context["multi"] = ""
+        elif unique_audio_languages == 2:
+            if not strict or (original_lang_tag and original_lang_tag in audio_lang_bases):
+                context["dual"] = "DUAL"
+        elif unique_audio_languages == 1 and strict:
+            if original_lang_tag and original_lang_tag not in audio_lang_bases:
+                context["dubbed"] = "DUBBED"
 
         lang_tag_rules = config.language_tags.get("rules") if config.language_tags else None
         if lang_tag_rules and self.tracks:
@@ -213,7 +211,7 @@ class Title:
             media_info: MediaInfo object of the file this name will be used for.
             folder: This filename will be used as a folder name. Some changes may want to
                 be made if this is the case.
-            show_service: Show the service tag (e.g., iT, NF) in the filename.
+            show_service: Show the service tag in the filename.
         """
 
 

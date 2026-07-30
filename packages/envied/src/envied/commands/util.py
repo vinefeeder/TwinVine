@@ -19,6 +19,34 @@ def util() -> None:
     """Various helper scripts and programs."""
 
 
+@util.command(name="refresh-services")
+def refresh_services() -> None:
+    """Force a refresh (git pull) of all service repos configured in directories.services."""
+    from envied.core.config import config
+    from envied.core.service_repo import is_repo_spec, refresh_repo
+    from envied.core.utils.redact import redact_path
+
+    entries = config.directories.services
+    if not isinstance(entries, list):
+        entries = [entries]
+    specs = [e for e in entries if isinstance(e, str) and is_repo_spec(e)]
+    if not specs:
+        click.echo("No service repos configured in directories.services.")
+        return
+    # manual refresh force-overwrites local changes (hard reset to upstream), then reports the diff
+    for spec in specs:
+        dest, changes = refresh_repo(spec)
+        if not dest:
+            click.echo(f"Failed to update {spec} (see log).")
+            continue
+        if changes:
+            click.echo(f"Updated {spec} → {redact_path(str(dest))}")
+            for line in changes:
+                click.echo(f"    {line}")
+        else:
+            click.echo(f"No changes {spec}")
+
+
 @util.command()
 @click.argument("path", type=Path)
 @click.argument("aspect", type=str)
@@ -254,6 +282,8 @@ def test(path: Path, map_: str) -> None:
             ],
             stderr=subprocess.PIPE,
             universal_newlines=True,
+            encoding="utf-8",
+            errors="replace",
         )
         reached_output = False
         errors = 0

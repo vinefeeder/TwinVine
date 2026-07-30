@@ -8,18 +8,45 @@ import click
 
 from envied.core.config import config
 from envied.core.service import Service
+from envied.core.service_repo import DirtyServiceRepo, is_repo_spec, resolve_service_repo
 from envied.core.utilities import import_module_by_path
+from envied.core.utils.redact import redact_path
 
 log = logging.getLogger("services")
 
-_service_dirs = config.directories.services
-if not isinstance(_service_dirs, list):
-    _service_dirs = [_service_dirs]
+_raw = config.directories.services
+if not isinstance(_raw, list):
+    _raw = [_raw]
+# resolve in config order — priority IS list order: the first source to define a tag is the source,
+# later sources (local or repo) with the same tag are shadowed. List local last to make it a fallback.
+_service_dirs: list[Path] = []
+DIRTY_REPOS: list[str] = []
+for _entry in _raw:
+    if isinstance(_entry, str) and is_repo_spec(_entry):
+        try:
+            _resolved = resolve_service_repo(_entry)
+        except DirtyServiceRepo as e:
+            # local edits in the clone — record it and let check_load_errors() exit cleanly
+            DIRTY_REPOS.append(redact_path(str(e.path)))
+            _resolved = None
+        if _resolved:
+            _service_dirs.append(_resolved)
+    else:
+        _service_dirs.append(Path(_entry))
 
-_SERVICES = sorted(
-    (path for service_dir in _service_dirs for path in service_dir.glob("*/__init__.py")),
-    key=lambda x: x.parent.stem,
-)
+# dedupe by tag honoring list order (first wins); track shadows for the load summary
+_seen: dict[str, Path] = {}
+SHADOWED: list[str] = []
+for _dir in _service_dirs:
+    for _path in _dir.glob("*/__init__.py"):
+        tag = _path.parent.stem
+        if tag in _seen:
+            SHADOWED.append(
+                f"{tag}: using {redact_path(str(_seen[tag]))}, ignoring duplicate {redact_path(str(_path))}"
+            )
+        else:
+            _seen[tag] = _path
+_SERVICES = sorted(_seen.values(), key=lambda x: x.parent.stem)
 
 
 def load_service(path: Path) -> object:
@@ -64,19 +91,39 @@ _MODULES, LOAD_ERRORS = load_services(_SERVICES)
 _ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in _MODULES.items()}
 
 
+_SUMMARY_LOGGED = False
+
+
 def check_load_errors() -> None:
-    """Raise a single clean error if any Service failed to load.
+    """Log a one-line load summary (once) and raise a single clean error on failures.
 
     Called when services are actually needed (listing/resolving) so the message
     is rendered once by Click, without a traceback and without cascading through
-    every command that imports this module.
+    every command that imports this module. Duplicate services (a tag also served by an
+    earlier, higher-priority source, which is ignored) are summarised here; the full
+    list — naming the path used and the duplicate ignored — is debug-only.
     """
+    if DIRTY_REPOS:
+        joined = "\n".join(f"  - {p}" for p in DIRTY_REPOS)
+        raise click.ClickException(
+            "Service repo has local changes — refusing to refresh so your edits are not lost.\n"
+            "Commit and push them to the upstream repo (or revert them), then retry:\n" + joined
+        )
+    global _SUMMARY_LOGGED
+    if not _SUMMARY_LOGGED:
+        _SUMMARY_LOGGED = True
+        summary = f"Loaded {len(_MODULES)} services"
+        if SHADOWED:
+            summary += f" ({len(SHADOWED)} duplicate(s) ignored)"
+        log.info(summary)
+        for shadow in SHADOWED:
+            log.debug("%s", shadow)
     if LOAD_ERRORS:
         joined = "\n".join(f"  - {err}" for err in LOAD_ERRORS)
         raise click.ClickException(f"Failed to load {len(LOAD_ERRORS)} service(s):\n{joined}")
 
 
-class Services(click.MultiCommand):
+class Services(click.Group):
     """Lazy-loaded command group of project services."""
 
     _remote_services_cache: list[dict] | None = None
@@ -251,7 +298,7 @@ class Services(click.MultiCommand):
     @staticmethod
     def get_tag(value: str) -> str:
         """
-        Get the Service Tag (e.g. DSNP, not DisneyPlus/Disney+, etc.) by an Alias.
+        Get the Service Tag (the name of the service's directory, not one of its aliases) by an Alias.
         Input value can be of any case-sensitivity.
         Original input value is returned if it did not match a service tag.
         """
@@ -273,6 +320,20 @@ class Services(click.MultiCommand):
             return module
 
         raise KeyError(f"There is no Service added by the Tag '{tag}'")
+
+    @staticmethod
+    def get_vault_tag(name: str) -> str:
+        """Resolve the key-vault namespace tag for a service.
+
+        Returns the service's VAULT_TAG override when set, otherwise its own tag.
+        Falls back to the resolved tag for non-local services (remote/import).
+        """
+        tag = Services.get_tag(name)
+        try:
+            service = Services.load(tag)
+        except KeyError:
+            return tag
+        return getattr(service, "VAULT_TAG", None) or tag
 
 
 __all__ = ("Services",)

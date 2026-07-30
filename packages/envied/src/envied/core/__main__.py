@@ -23,7 +23,7 @@ from envied.core.utilities import close_debug_logger, init_debug_logger
 @click.option("-v", "--version", is_flag=True, default=False, help="Print version information.")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Enable DEBUG level logs and JSON debug logging.")
 def main(version: bool, debug: bool) -> None:
-    """envied.Modular Movie, TV, and Music Archival Software."""
+    """envied—Modular Movie, TV, and Music Archival Software."""
     debug_logging_enabled = debug or config.debug
 
     logging.basicConfig(
@@ -43,6 +43,10 @@ def main(version: bool, debug: bool) -> None:
 
     if debug_logging_enabled:
         init_debug_logger(enabled=True)
+
+    if debug and not config.debug_requests:
+        for noisy in ("urllib3", "urllib3.connectionpool", "requests", "rnet", "httpx", "httpcore", "hpack", "h2"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
 
     urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -65,8 +69,6 @@ def main(version: bool, debug: bool) -> None:
         ),
         justify="center",
         )
-
-    
 
 
 @atexit.register

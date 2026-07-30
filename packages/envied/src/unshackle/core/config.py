@@ -1,0 +1,1 @@
+from envied.core.config import *

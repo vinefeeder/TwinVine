@@ -4,11 +4,16 @@ Downloads
 Temp/
 packages/envied/src/envied/logs/
 packages/envied/src/envied/envied.yaml
-packages/envied/src/envied/cache/TVNZ/local_storage.jsonv
+packages/envied/src/envied/cache/TVNZ/local_storage.json
+packages/envied/src/envied/services
+packages/envied/src/Cookies/*
 images/*
 tools/
 batch.txt
 *.json
+key_store.db-shm 
+key_store.db-wal 
+key_store.db
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

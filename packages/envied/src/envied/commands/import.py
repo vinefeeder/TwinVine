@@ -27,7 +27,7 @@ class ImportCommand:
         Re-fetches the manifest, injects the stored keys, then downloads/decrypts/muxes as a
         normal `dl` run. Any `dl` options after the file are forwarded verbatim:
 
-            envied.import export.json -r HDR10 --proxy US
+            unshackle import export.json -r HDR10 --proxy US
         """
         if not export_file.is_file():
             raise click.ClickException(f"Export file not found: {export_file}")
@@ -48,7 +48,7 @@ class ImportCommand:
             raise click.ClickException("Export file is missing the 'service' tag.")
 
         args = [*dl_args, "--import", str(export_file), service_tag]
-        dl.cli.main(args=args, prog_name="envied.dl", standalone_mode=False)
+        dl.cli.main(args=args, prog_name="unshackle dl", standalone_mode=False)
 
 
 globals()["import"] = ImportCommand

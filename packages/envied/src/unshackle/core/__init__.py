@@ -1,1 +1,1 @@
-from envied.core import *  # noqa: F401,F403
+__version__ = "5.3.0"

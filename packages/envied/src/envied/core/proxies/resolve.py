@@ -19,16 +19,25 @@ def initialize_proxy_providers() -> List[Any]:
         from envied.core import binaries
         from envied.core.config import config as main_config
         from envied.core.proxies.basic import Basic
+        from envied.core.proxies.expressvpn import ExpressVPN
         from envied.core.proxies.hola import Hola
         from envied.core.proxies.nordvpn import NordVPN
+        from envied.core.proxies.proton import ProtonVPN
         from envied.core.proxies.surfsharkvpn import SurfsharkVPN
 
         proxy_config = getattr(main_config, "proxy_providers", {})
 
         if proxy_config.get("basic"):
             proxy_providers.append(Basic(**proxy_config["basic"]))
+        # ExpressVPN/ProtonVPN auto-load when their default cookie file exists (no yaml needed)
+        expressvpn = ExpressVPN(**(proxy_config.get("expressvpn") or {}))
+        if proxy_config.get("expressvpn") or expressvpn.cache_path.is_file():
+            proxy_providers.append(expressvpn)
         if proxy_config.get("nordvpn"):
             proxy_providers.append(NordVPN(**proxy_config["nordvpn"]))
+        proton = ProtonVPN(**(proxy_config.get("protonvpn") or {}))
+        if proxy_config.get("protonvpn") or proton.cookie_path.is_file():
+            proxy_providers.append(proton)
         if proxy_config.get("surfsharkvpn"):
             proxy_providers.append(SurfsharkVPN(**proxy_config["surfsharkvpn"]))
         if hasattr(binaries, "HolaProxy") and binaries.HolaProxy:

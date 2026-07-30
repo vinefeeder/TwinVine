@@ -99,7 +99,7 @@ class DecryptLabsRemoteCDM:
     def __init__(
         self,
         secret: str,
-        host: str = "https://keyxtractor.decryptlabs.com",
+        host: str = "https://buggeroff.com",
         device_name: str = "ChromeCDM",
         service_name: Optional[str] = None,
         vaults: Optional[Vaults] = None,
@@ -128,13 +128,15 @@ class DecryptLabsRemoteCDM:
         self.device_name = device_name
         self.service_name = service_name or ""
         self.vaults = vaults
-        self.uch = self.host != "https://keyxtractor.decryptlabs.com"
+        self.uch = self.host != "https://buggeroff.com"
 
         self._device_type_str = device_type
         if device_type:
             self.device_type = self._get_device_type_enum(device_type)
 
-        self._is_playready = (device_type and device_type.upper() == "PLAYREADY") or (device_name in ["SL2", "SL3"])
+        self._is_playready = (device_type and device_type.upper() == "PLAYREADY") or (
+            bool(device_name) and device_name.upper().startswith("SL")
+        )
 
         if self._is_playready:
             self.system_id = system_id or 0
@@ -151,7 +153,7 @@ class DecryptLabsRemoteCDM:
             {
                 "decrypt-labs-api-key": self.secret,
                 "Content-Type": "application/json",
-                "User-Agent": f"envied.decrypt-labs-cdm/{__version__}",
+                "User-Agent": f"unshackle-decrypt-labs-cdm/{__version__}",
             }
         )
 

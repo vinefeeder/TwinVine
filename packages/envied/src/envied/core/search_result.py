@@ -9,7 +9,6 @@ class SearchResult:
         description: Optional[str] = None,
         label: Optional[str] = None,
         url: Optional[str] = None,
-        image: Optional[str] = None
     ):
         """
         A Search Result for any support Title Type.
@@ -34,15 +33,12 @@ class SearchResult:
             raise TypeError(f"Expected label to be a {str}, not {type(label)}")
         if not isinstance(url, (str, type(None))):
             raise TypeError(f"Expected url to be a {str}, not {type(url)}")
-        if not isinstance(image, (str, type(None))):
-            raise TypeError(f"Expected image to be a {str}, not {type(image)}")
-        
+
         self.id = id_
         self.title = title
         self.description = description
         self.label = label
         self.url = url
-        self.image = image
 
 
 __all__ = ("SearchResult",)

@@ -59,7 +59,7 @@ def check_load_errors() -> None:
         raise click.ClickException(f"Failed to load {len(LOAD_ERRORS)} command(s):\n{joined}")
 
 
-class Commands(click.MultiCommand):
+class Commands(click.Group):
     """Lazy-loaded command group of project commands."""
 
     def list_commands(self, ctx: click.Context) -> list[str]:

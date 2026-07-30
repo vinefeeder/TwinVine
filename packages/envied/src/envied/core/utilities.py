@@ -30,9 +30,10 @@ from unidecode import unidecode
 
 from envied.core.config import config
 from envied.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE
+from envied.core.utils.redact import redact_all
 
 """
-Utility functions for the envied.media archival tool.
+Utility functions for the unshackle media archival tool.
 
 This module provides various utility functions including:
 - Font discovery and fallback system for subtitle rendering
@@ -110,6 +111,7 @@ def import_module_by_path(path: Path) -> ModuleType:
 
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
 
     return module
@@ -140,6 +142,7 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
     filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
     filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)  # not filename safe chars
     filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
+    filename = filename.strip(" .")  # strip leading and trailing spaces and dots for OS path safety
 
     return filename
 
@@ -170,6 +173,11 @@ def find_missing_langs(
     match_func = is_exact_match if exact else is_close_match
     skip = {"all", "best", "orig"}
     return [tok for tok in requested if tok not in skip and not match_func(tok, available)]
+
+
+def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
+    """Return language tokens as the user wrote them, so 'orig' reads as 'orig' and not the language it resolved to."""
+    return ", ".join("orig" if tok == orig_token else tok for tok in tokens)
 
 
 def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # type: ignore
@@ -726,8 +734,10 @@ class FPS(ast.NodeVisitor):
             return self.visit(node.left) / self.visit(node.right)
         raise ValueError(f"Invalid operation: {node.op}")
 
-    def visit_Num(self, node: ast.Num) -> complex:
-        return node.n
+    def visit_Constant(self, node: ast.Constant) -> float:
+        if not isinstance(node.value, (int, float)):
+            raise ValueError(f"Invalid fps value: {node.value!r}")
+        return node.value
 
     def visit_Expr(self, node: ast.Expr) -> float:
         return self.visit(node.value)
@@ -784,7 +794,7 @@ class DebugLogger:
             operation="session_start",
             message="Debug logging session started",
             context={
-                "envied.version": __version__,
+                "unshackle_version": __version__,
                 "python_version": sys.version,
                 "platform": platform.platform(),
                 "platform_system": platform.system(),
@@ -814,7 +824,7 @@ class DebugLogger:
             operation: Name of the operation being performed
             message: Human-readable message
             context: Additional context information
-            service: Service name (e.g., DSNP, NF)
+            service: Service tag
             error: Exception object if an error occurred
             request: Request details (URL, method, headers, body)
             response: Response details (status, headers, body)
@@ -834,7 +844,7 @@ class DebugLogger:
         if operation:
             entry["operation"] = operation
         if message:
-            entry["message"] = message
+            entry["message"] = redact_all(message)
         if service:
             entry["service"] = service
         if context:
@@ -851,8 +861,10 @@ class DebugLogger:
         if error:
             entry["error"] = {
                 "type": type(error).__name__,
-                "message": str(error),
-                "traceback": traceback.format_exception(type(error), error, error.__traceback__),
+                "message": redact_all(str(error)),
+                "traceback": [
+                    redact_all(line) for line in traceback.format_exception(type(error), error, error.__traceback__)
+                ],
             }
 
         for key, value in kwargs.items():
@@ -873,7 +885,11 @@ class DebugLogger:
         if data is None:
             return None
 
-        if isinstance(data, (str, int, float, bool)):
+        if isinstance(data, str):
+            # mask secrets, collapse content/CDN URLs, and strip local path prefixes
+            return redact_all(data)
+
+        if isinstance(data, (int, float, bool)):
             return data
 
         if isinstance(data, (list, tuple)):
@@ -910,7 +926,7 @@ class DebugLogger:
                 return "[BINARY_DATA]"
 
         if isinstance(data, Path):
-            return str(data)
+            return redact_all(str(data))
 
         try:
             return str(data)
@@ -970,7 +986,11 @@ class DebugLogger:
             url: Request URL
             **kwargs: Additional request details (headers, body, etc.)
         """
-        self.log(level="DEBUG", operation="service_call", request={"method": method, "url": url, **kwargs})
+        message = kwargs.pop("message", "")
+        level = kwargs.pop("level", "DEBUG")
+        self.log(
+            level=level, operation="service_call", message=message, request={"method": method, "url": url, **kwargs}
+        )
 
     def log_drm_operation(self, drm_type: str, operation: str, **kwargs):
         """
@@ -979,11 +999,11 @@ class DebugLogger:
         Args:
             drm_type: DRM type (Widevine, PlayReady, etc.)
             operation: DRM operation name
-            **kwargs: Additional context (PSSH, KIDs, keys, etc.)
+            **kwargs: Additional context. Pass ``message=``/``level=`` to override the defaults.
         """
-        self.log(
-            level="DEBUG", operation=f"drm_{operation}", message=f"{drm_type} {operation}", drm_type=drm_type, **kwargs
-        )
+        message = kwargs.pop("message", None) or f"{drm_type} {operation}"
+        level = kwargs.pop("level", "DEBUG")
+        self.log(level=level, operation=f"drm_{operation}", message=message, drm_type=drm_type, **kwargs)
 
     def log_vault_query(self, vault_name: str, operation: str, **kwargs):
         """
@@ -992,12 +1012,14 @@ class DebugLogger:
         Args:
             vault_name: Name of the vault
             operation: Vault operation (get_key, add_key, etc.)
-            **kwargs: Additional context (KID, key, success, etc.)
+            **kwargs: Additional context. Pass ``message=``/``level=`` to override the defaults.
         """
+        message = kwargs.pop("message", None) or f"Vault {vault_name}: {operation}"
+        level = kwargs.pop("level", "DEBUG")
         self.log(
-            level="DEBUG",
+            level=level,
             operation=f"vault_{operation}",
-            message=f"Vault {vault_name}: {operation}",
+            message=message,
             vault=vault_name,
             **kwargs,
         )
@@ -1037,6 +1059,59 @@ def get_debug_logger() -> Optional[DebugLogger]:
     return _debug_logger
 
 
+def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any) -> None:
+    """Emit a single structured debug-log entry. No-op when debug logging is disabled.
+
+    The canonical one-shot logging primitive — replaces the
+    ``if dl := get_debug_logger(): dl.log(...)`` guard boilerplate. To add logging to a new
+    feature, call ``log_event("my_feature_event", message="...", context={...})``.
+    """
+    dl = _debug_logger
+    if dl:
+        dl.log(level=level, operation=operation, message=message, **kwargs)
+
+
+@contextlib.contextmanager
+def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any):
+    """Time a block and log ``operation`` once it finishes, with ``duration_ms``.
+
+    Logs at ``level`` with ``success=True`` on normal exit, or at ERROR with the exception and
+    ``success=False`` if the block raises (then re-raises). No-op when debug logging is disabled,
+    so it is always safe to wrap a block in it.
+
+    Example::
+
+        with timed_operation("mux", context={"output": str(path)}):
+            run_mkvmerge(...)
+    """
+    dl = _debug_logger
+    if not dl:
+        yield
+        return
+    start = time.monotonic()
+    try:
+        yield
+    except Exception as e:
+        dl.log(
+            level="ERROR",
+            operation=operation,
+            message=message or f"{operation} failed",
+            error=e,
+            success=False,
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
+            **kwargs,
+        )
+        raise
+    dl.log(
+        level=level,
+        operation=operation,
+        message=message,
+        success=True,
+        duration_ms=round((time.monotonic() - start) * 1000, 1),
+        **kwargs,
+    )
+
+
 def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False):
     """
     Initialize the global debug logger.
@@ -1065,4 +1140,6 @@ __all__ = (
     "get_debug_logger",
     "init_debug_logger",
     "close_debug_logger",
+    "log_event",
+    "timed_operation",
 )

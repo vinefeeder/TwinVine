@@ -3,17 +3,27 @@ from __future__ import annotations
 import logging
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 from xml.sax.saxutils import escape
 
 from envied.core import binaries
 from envied.core.config import config
-from envied.core.providers import (ExternalIds, MetadataResult, enrich_ids, fetch_external_ids, fuzzy_match,
-                                      get_available_providers, get_provider, search_metadata)
+from envied.core.providers import (
+    ExternalIds,
+    MetadataResult,
+    enrich_ids,
+    fetch_external_ids,
+    fuzzy_match,
+    get_available_providers,
+    get_provider,
+    search_metadata,
+)
 from envied.core.titles.episode import Episode
 from envied.core.titles.movie import Movie
 from envied.core.titles.title import Title
+from envied.core.utils.subprocess import log_tool_run
 
 log = logging.getLogger("TAGS")
 
@@ -33,11 +43,22 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
         f.write("\n".join(xml_lines))
         tmp_path = Path(f.name)
     try:
+        tag_start = time.monotonic()
         result = subprocess.run(
             [str(binaries.Mkvpropedit), str(path), "--tags", f"global:{tmp_path}"],
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        log_tool_run(
+            "mkvpropedit tags",
+            "mkvpropedit",
+            result.returncode,
+            duration_ms=round((time.monotonic() - tag_start) * 1000, 1),
+            file=Path(path).name,
+            tag_count=len(tags),
         )
         if result.returncode != 0:
             log.warning("mkvpropedit failed (exit %d): %s", result.returncode, result.stderr.strip())

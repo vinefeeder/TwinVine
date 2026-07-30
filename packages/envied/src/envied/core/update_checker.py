@@ -23,7 +23,7 @@ class UpdateChecker:
         DEFAULT_CHECK_INTERVAL: Default time between checks in seconds (24 hours)
     """
 
-    REPO_URL = "https://api.github.com/repos/envied.dl/envied.releases/latest"
+    REPO_URL = "https://api.github.com/repos/unshackle-dl/unshackle/releases/latest"
     TIMEOUT = 5
     DEFAULT_CHECK_INTERVAL = 24 * 60 * 60
 
@@ -209,8 +209,7 @@ class UpdateChecker:
             return None
 
         try:
-            loop = asyncio.get_event_loop()
-            latest_version = await loop.run_in_executor(None, cls._fetch_latest_version)
+            latest_version = await asyncio.to_thread(cls._fetch_latest_version)
 
             if latest_version and cls._compare_versions(current_version, latest_version):
                 return latest_version

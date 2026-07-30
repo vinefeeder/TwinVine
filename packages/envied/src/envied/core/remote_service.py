@@ -1,7 +1,7 @@
 """Remote service adapter for envied.
 
 Implements the Service interface by proxying authenticate, get_titles,
-get_tracks, get_chapters, and license methods to a remote envied.server.
+get_tracks, get_chapters, and license methods to a remote unshackle server.
 Everything else (track selection, download, decrypt, mux) runs locally.
 """
 
@@ -31,12 +31,21 @@ from envied.core.titles.movie import Movie, Movies
 from envied.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from envied.core.tracks.attachment import Attachment
 from envied.core.tracks.track import Track
+from envied.core.utils.redact import redact_text, safe_display_url
 
 log = logging.getLogger("remote_service")
 
+SENSITIVE_DATA_KEYS = ("credential", "credentials", "password", "token", "api_key")
+
+
+def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
+    """Mask URL userinfo and any request-payload secrets before the text is logged."""
+    secrets = [v for k in SENSITIVE_DATA_KEYS if isinstance(v := (data or {}).get(k), str) and v]
+    return redact_text(text, secrets) or ""
+
 
 class RemoteClient:
-    """HTTP client for the envied.serve API."""
+    """HTTP client for the unshackle serve API."""
 
     def __init__(self, server_url: str, api_key: str) -> None:
         self.server_url = server_url.rstrip("/")
@@ -49,7 +58,7 @@ class RemoteClient:
             from envied.core import __version__
 
             self._session = requests.Session()
-            self._session.headers["User-Agent"] = f"envied.{__version__}"
+            self._session.headers["User-Agent"] = f"unshackle/{__version__}"
             if self.api_key:
                 self._session.headers["X-Secret-Key"] = self.api_key
         return self._session
@@ -59,14 +68,15 @@ class RemoteClient:
         try:
             resp = getattr(self.session, method)(url, json=data, timeout=120 if method == "post" else 30)
         except requests.ConnectionError:
-            log.error(f"Could not connect to remote server at {self.server_url}. Is it running? (envied.serve)")
+            server_url = safe_display_url(self.server_url)
+            log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
             raise SystemExit(1)
         except requests.Timeout:
             log.error(f"Request to remote server timed out: {endpoint}")
             raise SystemExit(1)
         result = resp.json()
         if resp.status_code >= 400:
-            error_msg = result.get("message", resp.text)
+            error_msg = redact_secrets(str(result.get("message", resp.text)), data)
             error_code = result.get("error_code", "UNKNOWN")
             log.error(f"Server error [{error_code}]: {error_msg}")
             raise SystemExit(1)
@@ -188,7 +198,7 @@ def _build_tracks(data: Dict[str, Any]) -> Tracks:
     return tracks
 
 
-def _resolve_manifest_data(tracks: Tracks, manifests: list, session: Any) -> None:
+def _resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
     """Re-parse serialized manifests and populate track.data for downloading.
 
     The server serializes DASH and ISM manifest XML as zlib-compressed base64.
@@ -197,7 +207,8 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list, session: Any) -> Non
     to copy track.data. HLS is skipped as it re-fetches from track.url.
     """
     import base64 as b64
-    import zlib
+
+    from envied.core.api.compression import safe_inflate
 
     if not manifests:
         return
@@ -213,7 +224,7 @@ def _resolve_manifest_data(tracks: Tracks, manifests: list, session: Any) -> Non
             continue
 
         try:
-            raw = zlib.decompress(b64.b64decode(m_data))
+            raw = safe_inflate(b64.b64decode(m_data))
 
             if m_type == "dash":
                 from lxml import etree
@@ -287,6 +298,7 @@ def _build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Un
             name=info.get("name"),
             year=info.get("year"),
             language=lang,
+            air_date=info.get("air_date"),
         )
     return Movie(
         id_=info.get("id", fallback_id),
@@ -366,7 +378,7 @@ def _resolve_proxy(proxy_arg: Optional[str]) -> Optional[str]:
 
 
 class RemoteService:
-    """Service adapter that proxies to a remote envied.server.
+    """Service adapter that proxies to a remote unshackle server.
 
     Implements the same interface dl.py's result() expects without
     subclassing Service (avoids proxy/geofence setup in __init__).
@@ -410,6 +422,7 @@ class RemoteService:
             "https://",
             HTTPAdapter(
                 max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+                pool_maxsize=64,
                 pool_block=True,
             ),
         )
@@ -425,7 +438,6 @@ class RemoteService:
         config_maps = {
             "cdm": ("cdm", self.service_tag),
             "decryption": ("decryption_map", self.service_tag),
-            "downloader": ("downloader_map", self.service_tag),
         }
         for key, (attr, tag) in config_maps.items():
             if svc_config.get(key):
@@ -435,8 +447,6 @@ class RemoteService:
                     target = getattr(config, attr)
                 target[tag] = svc_config[key]
 
-        if svc_config.get("downloader"):
-            config.downloader = svc_config["downloader"]
         if svc_config.get("decryption"):
             config.decryption = svc_config["decryption"]
 
@@ -594,7 +604,7 @@ class RemoteService:
         for k, v in result.get("session_cookies", {}).items():
             self._session.cookies.set(k, v)
 
-        _resolve_manifest_data(tracks, result.get("manifests", []), self._session)
+        _resolve_manifest_data(tracks, result.get("manifests", []))
 
         self._server_cdm_type = result.get("server_cdm_type", "widevine")
 
@@ -717,6 +727,11 @@ class RemoteService:
     ) -> Optional[Union[bytes, str]]:
         return self._proxy_license(challenge, track, "playready")
 
+    def get_clearkey_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+    ) -> Optional[Union[bytes, str, dict]]:
+        return None
+
     def get_widevine_service_certificate(
         self,
         *,
@@ -823,17 +838,22 @@ class RemoteService:
         if not cache_data:
             return
 
-        import zlib
+        from envied.core.api.compression import safe_inflate
+        from envied.core.api.sanitize import safe_cache_key
 
         cache_dir = config.directories.cache / self.service_tag
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         for key, content in cache_data.items():
+            safe_name = safe_cache_key(key)
+            if not safe_name:
+                self.log.warning(f"Rejecting unsafe cache filename from server: {key!r}")
+                continue
             try:
-                decompressed = zlib.decompress(base64.b64decode(content))
-                (cache_dir / key).with_suffix(".json").write_bytes(decompressed)
+                decompressed = safe_inflate(base64.b64decode(content))
+                (cache_dir / safe_name).with_suffix(".json").write_bytes(decompressed)
             except Exception as e:
-                self.log.warning(f"Failed to save returned cache file '{key}': {e}")
+                self.log.warning(f"Failed to save returned cache file '{safe_name}': {e}")
 
         self.log.info(f"Saved {len(cache_data)} cache file(s) from server")
 

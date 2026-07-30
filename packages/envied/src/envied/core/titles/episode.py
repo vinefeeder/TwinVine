@@ -1,6 +1,7 @@
 import re
 from abc import ABC
 from collections import Counter
+from datetime import date, datetime
 from typing import Any, Iterable, Optional, Union
 
 from langcodes import Language
@@ -11,7 +12,7 @@ from sortedcontainers import SortedKeyList
 from envied.core.config import config
 from envied.core.titles.title import Title
 from envied.core.utilities import sanitize_filename
-from envied.core.utils.template_formatter import TemplateFormatter
+from envied.core.utils.template_formatter import TemplateFormatter, detect_spacer
 
 
 class Episode(Title):
@@ -27,6 +28,7 @@ class Episode(Title):
         language: Optional[Union[str, Language]] = None,
         data: Optional[Any] = None,
         description: Optional[str] = None,
+        air_date: Optional[Union[date, str]] = None,
     ) -> None:
         super().__init__(id_, service, language, data)
 
@@ -71,12 +73,22 @@ class Episode(Title):
         if year is not None and year <= 0:
             raise ValueError(f"Episode year cannot be {year}")
 
+        if isinstance(air_date, datetime):
+            air_date = air_date.date()  # avoid leaking time into the {date} token
+        elif isinstance(air_date, str):
+            # keep as date when parseable so naming can format it
+            try:
+                air_date = date.fromisoformat(air_date[:10])
+            except ValueError:
+                pass
+
         self.title = title
         self.season = season
         self.number = number
         self.name = name
         self.year = year
         self.description = description
+        self.air_date = air_date
 
     def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
         """Build template context dictionary from MediaInfo."""
@@ -87,9 +99,38 @@ class Episode(Title):
         context["episode"] = f"E{self.number:02}"
         context["season_episode"] = f"S{self.season:02}E{self.number:02}"
         context["episode_name"] = self.name or ""
+        context["date"] = ""
+        if self.air_date:
+            # daily/sports: air date replaces SxxExx
+            disp = self._air_date_display()
+            context["season"] = disp
+            context["episode"] = ""
+            context["season_episode"] = disp
+            context["year"] = ""  # air date is the sole date in the file; folders keep the year
+            context["date"] = self.air_date.isoformat() if isinstance(self.air_date, date) else str(self.air_date)
         return context
 
+    def _air_date_display(self) -> str:
+        """Render air_date using the series template's own separator (dots or spaces)."""
+        if isinstance(self.air_date, date):
+            sep = config.get_template_separator("series") if config.output_template.get("series") else "."
+            return f"{self.air_date.year:04}{sep}{self.air_date.month:02}{sep}{self.air_date.day:02}"
+        return str(self.air_date)
+
+    def _folder_season(self) -> str:
+        """Season folder label: air year for dated content, else SxxExx-style season."""
+        if isinstance(self.air_date, date):
+            return f"{self.air_date.year:04}"
+        return f"S{self.season:02}"
+
     def __str__(self) -> str:
+        if self.air_date:
+            return "{title}{year} {date} {name}".format(
+                title=self.title,
+                year=f" {self.year}" if self.year else "",
+                date=self._air_date_display(),
+                name=self.name or "",
+            ).strip()
         return "{title}{year} S{season:02}E{number:02} {name}".format(
             title=self.title,
             year=f" {self.year}" if self.year else "",
@@ -102,15 +143,16 @@ class Episode(Title):
         if folder:
             template = config.get_folder_template("series")
             if template:
-                formatter = TemplateFormatter(template)
                 context = self._build_template_context(media_info, show_service)
-                context["season"] = f"S{self.season:02}"
-
-                folder_name = formatter.format(context)
-
-                separators = re.sub(r"\{[^}]*\}", "", template)
-                spacer = "." if "." in separators and " " not in separators else " "
-                return sanitize_filename(folder_name, spacer)
+                context["season"] = self._folder_season()
+                context["year"] = self.year or ""  # folders keep the year
+                spacer = detect_spacer(template)  # one style for the whole path
+                segments = [
+                    TemplateFormatter(seg, spacer).format(context)
+                    for seg in re.split(r"[\\/]", template)
+                    if seg.strip()
+                ]
+                return "/".join(s for s in segments if s)
 
             series_template = config.output_template.get("series")
             if series_template:
@@ -126,7 +168,8 @@ class Episode(Title):
 
                 formatter = TemplateFormatter(derived_template)
                 context = self._build_template_context(media_info, show_service)
-                context["season"] = f"S{self.season:02}"
+                context["season"] = self._folder_season()
+                context["year"] = self.year or ""  # folders keep the year
 
                 folder_name = formatter.format(context)
 
@@ -137,7 +180,7 @@ class Episode(Title):
                 name = f"{self.title}"
                 if self.year:
                     name += f" {self.year}"
-                name += f" S{self.season:02}"
+                name += f" {self._folder_season()}"
                 return sanitize_filename(name, " ")
 
         formatter = TemplateFormatter(config.output_template["series"])
@@ -160,7 +203,7 @@ class Series(SortedKeyList, ABC):
         sum(seasons.values())
         season_breakdown = ", ".join(f"S{season}({count})" for season, count in sorted(seasons.items()))
         tree = Tree(
-            f"{num_seasons} season{'s'[:num_seasons^1]}, {season_breakdown}",
+            f"{num_seasons} season{'s'[: num_seasons ^ 1]}, {season_breakdown}",
             guide_style="bright_black",
         )
         if verbose:
@@ -171,13 +214,17 @@ class Series(SortedKeyList, ABC):
                 )
                 for episode in self:
                     if episode.season == season:
+                        label = (
+                            episode._air_date_display()
+                            if episode.air_date
+                            else str(episode.number).zfill(len(str(episodes)))
+                        )
                         if episode.name:
-                            season_tree.add(
-                                f"[bold]{str(episode.number).zfill(len(str(episodes)))}.[/] "
-                                f"[bright_black]{episode.name}"
-                            )
+                            season_tree.add(f"[bold]{label}.[/] [bright_black]{episode.name}")
+                        elif episode.air_date:
+                            season_tree.add(f"[bright_black]{label}")
                         else:
-                            season_tree.add(f"[bright_black]Episode {str(episode.number).zfill(len(str(episodes)))}")
+                            season_tree.add(f"[bright_black]Episode {label}")
 
         return tree
 

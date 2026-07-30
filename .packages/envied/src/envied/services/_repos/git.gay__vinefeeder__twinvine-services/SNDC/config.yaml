@@ -1,0 +1,10 @@
+user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+
+base_url: 'https://api-v2.soundcloud.com'
+web_url: 'https://soundcloud.com'
+drm_license_host: 'https://license.media-streaming.soundcloud.cloud'
+
+client_id: 'lmRjTI0FqeXygHMXc3hRzS7hth20PNk5'
+app_version: '1783608776'
+
+default_quality: 'original'

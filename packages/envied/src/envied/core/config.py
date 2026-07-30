@@ -8,11 +8,24 @@ from typing import Any, Optional
 import yaml
 from appdirs import AppDirs
 
+from envied.core.service_repo import is_repo_spec
+from envied.core.utils.collections import ci_get
+
+
+def resolve_decryption(decryption_map: dict, default: str, service: str) -> str:
+    """Pick the decryption tool for a service (case-insensitive), falling back to default."""
+    return ci_get(decryption_map, service, default)
+
+
+def resolve_cdm_name(cdm: dict, service: str, override: Any = None) -> Any:
+    """Resolve a service's top-level CDM entry (case-insensitive), with default fallback."""
+    return override or ci_get(cdm, service) or ci_get(cdm, "default")
+
 
 class Config:
     class _Directories:
         # default directories, do not modify here, set via config
-        app_dirs = AppDirs("envied", False)
+        app_dirs = AppDirs("unshackle", False)
         core_dir = Path(__file__).resolve().parent
         namespace_dir = core_dir.parent
         commands = namespace_dir / "commands"
@@ -33,8 +46,8 @@ class Config:
 
     class _Filenames:
         # default filenames, do not modify here, set via config
-        log = "envied.{name}_{time}.log"  # Directories.logs
-        debug_log = "envied.debug_{service}_{time}.jsonl"  # Directories.logs
+        log = "unshackle_{name}_{time}.log"  # Directories.logs
+        debug_log = "unshackle_debug_{service}_{time}.jsonl"  # Directories.logs
         config = "config.yaml"  # Directories.services / tag
         root_config = "envied.yaml"  # Directories.user_configs
         chapters = "Chapters_{title}_{random}.txt"  # Directories.temp
@@ -44,9 +57,17 @@ class Config:
         self.dl: dict = kwargs.get("dl") or {}
         self.cdm: dict = kwargs.get("cdm") or {}
         self.chapter_fallback_name: str = kwargs.get("chapter_fallback_name") or ""
-        self.curl_impersonate: dict = kwargs.get("curl_impersonate") or {}
+        self.network: dict = kwargs.get("network") or kwargs.get("curl_impersonate") or {}
+        self.curl_impersonate: dict = self.network
+        if "curl_impersonate" in kwargs and "network" not in kwargs:
+            warnings.warn(
+                "the 'curl_impersonate' config section is deprecated, rename it to 'network'.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.remote_cdm: list[dict] = kwargs.get("remote_cdm") or []
         self.credentials: dict = kwargs.get("credentials") or {}
+        self.firefox_cookies: dict = kwargs.get("firefox_cookies") or {}
         self.subtitle: dict = kwargs.get("subtitle") or {}
 
         self.directories = self._Directories()
@@ -55,7 +76,8 @@ class Config:
                 # these must not be modified by the user
                 continue
             if name == "services" and isinstance(path, list):
-                setattr(self.directories, name, [Path(p).expanduser() for p in path])
+                # repo specs (git URLs / owner-repo) stay raw strings; resolved lazily in services.py
+                setattr(self.directories, name, [p if is_repo_spec(p) else Path(p).expanduser() for p in path])
             else:
                 setattr(self.directories, name, Path(path).expanduser())
 
@@ -74,6 +96,7 @@ class Config:
         self.audio: dict = kwargs.get("audio") or {}
         self.headers: dict = kwargs.get("headers") or {}
         self.key_vaults: list[dict[str, Any]] = kwargs.get("key_vaults", [])
+        self.vault_timeout: float = kwargs.get("vault_timeout", 10.0)
         self.muxing: dict = kwargs.get("muxing") or {}
         self.proxy_providers: dict = kwargs.get("proxy_providers") or {}
         self.remote_services: dict = kwargs.get("remote_services") or {}
@@ -91,14 +114,19 @@ class Config:
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)
         self.tag_imdb_tmdb: bool = kwargs.get("tag_imdb_tmdb", True)
+        self.imdb_api_enabled: bool = kwargs.get("imdb_api_enabled", False)
+        self.omdb_api_key: str = kwargs.get("omdb_api_key") or ""
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.ipinfo_api_key: str = kwargs.get("ipinfo_api_key") or ""
         self.update_checks: bool = kwargs.get("update_checks", True)
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
+        # mask local base dirs (install root/venv/home) in logged paths; False shows full paths
+        self.redact_paths: bool = kwargs.get("redact_paths", True)
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
+        self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
         self.folder_template: str = ""
@@ -112,7 +140,7 @@ class Config:
             raise SystemExit(
                 "ERROR: The 'scene_naming' option has been removed.\n"
                 "Please configure 'output_template' in your envied.yaml instead.\n"
-                "See envied.example.yaml for examples."
+                "See unshackle-example.yaml for examples."
             )
 
         if self.output_template:
@@ -126,6 +154,7 @@ class Config:
 
         self.debug: bool = kwargs.get("debug", False)
         self.debug_keys: bool = kwargs.get("debug_keys", False)
+        self.debug_requests: bool = kwargs.get("debug_requests", False)
 
     def _validate_output_templates(self) -> None:
         """Validate output template configurations and warn about potential issues."""
@@ -139,20 +168,31 @@ class Config:
             "episode",
             "season_episode",
             "episode_name",
+            "date",
             "quality",
             "resolution",
             "source",
             "tag",
             "track_number",
             "artist",
+            "album_artist",
             "album",
             "disc",
+            "track_total",
+            "disc_total",
+            "release_type",
+            "genre",
+            "explicit",
+            "isrc",
+            "upc",
+            "label",
             "audio",
             "audio_channels",
             "audio_full",
             "atmos",
             "dual",
             "multi",
+            "dubbed",
             "video",
             "hdr",
             "hfr",
@@ -167,8 +207,8 @@ class Config:
         if self.folder_template:
             all_templates["folder"] = self.folder_template
         for kind, tmpl in self.folder_templates.items():
-            if kind not in {"movies", "series", "songs"}:
-                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/songs)")
+            if kind not in {"movies", "series", "songs", "albums"}:
+                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/songs/albums)")
                 continue
             all_templates[f"folder.{kind}"] = tmpl
 
@@ -185,7 +225,11 @@ class Config:
                     warnings.warn(f"Unknown template variable '{var}' in {template_type} template")
 
             test_template = re.sub(r"\{[^}]+\}", "TEST", template_str)
-            if re.search(unsafe_chars, test_template):
+            if template_type.startswith("folder"):
+                unsafe_segment = any(re.search(unsafe_chars, seg) for seg in re.split(r"[\\/]", test_template))
+            else:
+                unsafe_segment = bool(re.search(unsafe_chars, test_template))
+            if unsafe_segment:
                 warnings.warn(f"Template '{template_type}' may contain filesystem-unsafe characters")
 
             if not template_str.strip():
@@ -194,7 +238,7 @@ class Config:
     def get_folder_template(self, kind: str) -> str:
         """Resolve the folder template for the given title kind.
 
-        kind: one of "movies", "series", "songs".
+        kind: one of "movies", "series", "songs", "albums".
         Falls back to the legacy single-string folder template, then "".
         """
         if self.folder_templates:
@@ -231,11 +275,11 @@ class Config:
 
 # noinspection PyProtectedMember
 POSSIBLE_CONFIG_PATHS = (
-    # The envied.Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/envied.
+    # The unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/unshackle)
     Config._Directories.namespace_dir / Config._Filenames.root_config,
-    # The Parent Folder to the envied.Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
+    # The Parent Folder to the unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
     Config._Directories.namespace_dir.parent / Config._Filenames.root_config,
-    # The AppDirs User Config Folder (e.g., ~/.config/envied.on Linux, %LOCALAPPDATA%\envied.on Windows)
+    # The AppDirs User Config Folder (e.g., ~/.config/unshackle on Linux, %LOCALAPPDATA%\unshackle on Windows)
     Path(Config._Directories.app_dirs.user_config_dir) / Config._Filenames.root_config,
 )
 

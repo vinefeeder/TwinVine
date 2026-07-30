@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import time
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from requests import Session
 
 from envied.core.binaries import FFProbe
 from envied.core.session import RnetSession
+from envied.core.utils.subprocess import log_tool_run
 
 if TYPE_CHECKING:
     from envied.core.tracks import Track
@@ -69,7 +71,7 @@ def measure_real_bitrate(
         elif track.descriptor == Track.Descriptor.ISM:
             segments = extract_ism(track, session)
         else:
-            # Descriptor.URL: a single file. Some services (e.g. AMZN) parse a DASH
+            # Descriptor.URL: a single file. Some services parse a DASH
             # manifest then collapse each representation to its single BaseURL and
             # flip the descriptor to URL, leaving the manifest (and its duration) in
             # track.data — recover the duration from there, else probe the file.
@@ -373,7 +375,7 @@ def extract_url(track: "Track", session: Union[Session, RnetSession], *, log: lo
                 duration = duration_ticks / timescale
 
     if not duration or duration <= 0:
-        # Services like AMZN clear the manifest data after collapsing to a single
+        # Some services clear the manifest data after collapsing to a single
         # file; fall back to reading the duration straight from the remote file.
         duration = ffprobe_duration(url, session, log=log)
 
@@ -421,12 +423,19 @@ def probe_bytes_duration(data: Optional[bytes], log: logging.Logger) -> Optional
         return None
     ffprobe_bin = str(FFProbe) if FFProbe else "ffprobe"
     try:
+        probe_start = time.monotonic()
         result = subprocess.run(
             [ffprobe_bin, "-v", "error", "-show_entries", "format=duration:stream=duration", "-of", "json", "pipe:"],
             input=data,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=60,
+        )
+        log_tool_run(
+            "ffprobe duration probe",
+            "ffprobe",
+            result.returncode,
+            duration_ms=round((time.monotonic() - probe_start) * 1000, 1),
         )
         info = json.loads(result.stdout or b"{}")
         candidates = [info.get("format", {}).get("duration")]

@@ -16,7 +16,7 @@ from envied.core import binaries
 from envied.core.config import config
 from envied.core.console import console
 from envied.core.constants import context_settings
-from envied.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
+from envied.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from envied.core.service import Service
 from envied.core.services import Services
 from envied.core.utils.click_types import ContextData
@@ -67,8 +67,14 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
         with console.status("Loading Proxy Providers...", spinner="dots"):
             if config.proxy_providers.get("basic"):
                 proxy_providers.append(Basic(**config.proxy_providers["basic"]))
+            expressvpn = ExpressVPN(**(config.proxy_providers.get("expressvpn") or {}))
+            if config.proxy_providers.get("expressvpn") or expressvpn.cache_path.is_file():
+                proxy_providers.append(expressvpn)
             if config.proxy_providers.get("nordvpn"):
                 proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
+            proton = ProtonVPN(**(config.proxy_providers.get("protonvpn") or {}))
+            if config.proxy_providers.get("protonvpn") or proton.cookie_path.is_file():
+                proxy_providers.append(proton)
             if config.proxy_providers.get("surfsharkvpn"):
                 proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
             if config.proxy_providers.get("windscribevpn"):
@@ -86,8 +92,8 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                 # requesting proxy from a specific proxy provider
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
             # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
-            if re.match(r"^[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
-                r"^[a-z]+:[a-z]{2}(?:\d+)?$", proxy, re.IGNORECASE
+            if re.match(r"^[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
+                r"^[a-z]+:[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
             ):
                 proxy = proxy.lower()
                 with console.status(f"Getting a Proxy to {proxy}...", spinner="dots"):
@@ -103,13 +109,25 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                             log.error(f"The proxy provider {requested_provider} had no proxy for {proxy}")
                             sys.exit(1)
                         proxy = ctx.params["proxy"] = proxy_uri
-                        log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                        display = None
+                        if hasattr(proxy_provider, "last_connection_display"):
+                            display = proxy_provider.last_connection_display()
+                        if display:
+                            log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
+                        else:
+                            log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                     else:
                         for proxy_provider in proxy_providers:
                             proxy_uri = proxy_provider.get_proxy(proxy)
                             if proxy_uri:
                                 proxy = ctx.params["proxy"] = proxy_uri
-                                log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                display = None
+                                if hasattr(proxy_provider, "last_connection_display"):
+                                    display = proxy_provider.last_connection_display()
+                                if display:
+                                    log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
+                                else:
+                                    log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
                                 break
             else:
                 log.info(f"Using explicit Proxy: {proxy}")
@@ -136,7 +154,6 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
             result_text = f"[bold text]{result.title}[/]"
             if result.url:
                 result_text = f"[link={result.url}]{result_text}[/link]"
-
             if result.label:
                 result_text += f"  [pink]{result.label}[/]"
             if result.description:
@@ -144,7 +161,7 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
             result_text += f"\n[bright_black]id: {result.id}[/]"
             search_results.add(result_text + "\n")
 
-    # update cookie
+    # update cookies
     cookie_file = dl.get_cookie_path(service_tag, profile)
     if cookie_file:
         dl.save_cookies(cookie_file, service.session.cookies)

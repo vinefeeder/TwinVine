@@ -44,7 +44,7 @@ output_template:
   # Plex-friendly naming (space-separated, clean format)
   movies: '{title} ({year})'
   series: '{title} {season_episode} {episode_name?}'
-  songs: '{track_number}. {title}'
+  songs: '{track_number} {title}'
   #
   # Minimal naming (basic info only)
   # movies: '{title}.{year}.{quality}'
@@ -100,7 +100,7 @@ credentials:
 # Override default directories used across envied
 directories:
   cache: Cache
-  cookies: Cookies
+  cookies: ./packages/envied/src/Cookies
   dcsl: DCSL # Device Certificate Status List
   downloads: Downloads
   logs: Logs
@@ -108,12 +108,14 @@ directories:
   wvds: WVDs
   prds: PRDs
   services:
-    - ./packages/envied/src/envied/services
+    - https://git.gay/vinefeeder/twinvine-services.git
+      # ./packages/envied/src/envied/services ## local user services
 
 
 # Pre-define which Widevine or PlayReady device to use for each Serviceuv run envied
 cdm:
   default: device
+  ITV: playready
 
 
 # Key Vaults store your obtained Content Encryption Keys (CEKs)

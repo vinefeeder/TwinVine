@@ -11,6 +11,17 @@ TwinVine helps you find, select, and download media. Use the graphical front end
 
 Envied is forked from unshackle github.com/unshackle-dl/unshackle and I thank the developers for their effort.
 
+## Take Note  
+  
+* This release has taken a snapshot of the unshackle dev branch. It has many new features and since a full release is unforthcoming, this update will prevent envied falling too far behind.
+
+* Services are no longer in the Twinvine repo. 
+At first envied-run, services will be downloaded automatically. They will be stored in /packages/envied/src/envied/services/_repos/git.gay__vinefeeder__twinvine-services  
+   
+* PRDs: A playready prd is available. Set which services you wish to use it in envied.yaml - see under cdm. ITV is currently set to use playready  
+
+* Be sure to copy envied-working-example to a new envied.yaml. Add back your credentials list and any proxy-providers from your old envied.yaml.
+
 ## Key workflows
 
 - Use `envied` when you already have an exact program URL.

@@ -2,18 +2,19 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import time
 from functools import partial
 from pathlib import Path
-from typing import Callable, Iterator, Optional, Sequence, Union
+from typing import Any, Callable, Iterator, Optional, Sequence, Union
 
 from langcodes import Language, closest_supported_match
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.tree import Tree
 
 from envied.core import binaries
 from envied.core.config import config
-from envied.core.console import console
+from envied.core.console import GradientPulseBarColumn, console
 from envied.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE, AnyTrack, TrackT
 from envied.core.events import events
 from envied.core.tracks.attachment import Attachment
@@ -22,7 +23,7 @@ from envied.core.tracks.chapters import Chapter, Chapters
 from envied.core.tracks.subtitle import Subtitle
 from envied.core.tracks.track import Track
 from envied.core.tracks.video import Video
-from envied.core.utilities import get_debug_logger, is_close_match, sanitize_filename
+from envied.core.utilities import is_close_match, log_event, sanitize_filename
 from envied.core.utils.collections import as_list, flatten
 
 
@@ -113,7 +114,7 @@ class Tracks:
                     if add_progress and track_type not in (Chapter, Attachment):
                         progress = Progress(
                             SpinnerColumn(finished_text=""),
-                            BarColumn(),
+                            GradientPulseBarColumn(),
                             "•",
                             TimeRemainingColumn(compact=True, elapsed_when_finished=True),
                             "•",
@@ -125,10 +126,10 @@ class Tracks:
                         state = {"total": 100.0}
 
                         def update_track_progress(
-                            task_id: int = task,
+                            task_id: TaskID = task,
                             _state: dict[str, float] = state,
                             _progress: Progress = progress,
-                            **kwargs,
+                            **kwargs: Any,
                         ) -> None:
                             """
                             Ensure terminal status states render as a fully completed bar.
@@ -136,12 +137,20 @@ class Tracks:
                             Some downloaders can report completed slightly below total
                             before emitting the final "Downloaded" state.
                             """
-                            if "total" in kwargs and kwargs["total"] is not None:
-                                _state["total"] = kwargs["total"]
+                            if "total" in kwargs:
+                                if kwargs["total"] is None:
+                                    # Progress.update() ignores total=None; an un-started task pulses
+                                    del kwargs["total"]
+                                    _progress.reset(task_id, start=False)
+                                else:
+                                    _state["total"] = kwargs["total"]
+                                    _progress.start_task(task_id)
 
                             downloaded_state = kwargs.get("downloaded")
                             if downloaded_state in {"Downloaded", "Decrypted", "[yellow]SKIPPED"}:
                                 kwargs["completed"] = _state["total"]
+                                kwargs["total"] = _state["total"]
+                                _progress.start_task(task_id)
                             _progress.update(task_id=task_id, **kwargs)
 
                         progress_callables.append(update_track_progress)
@@ -235,11 +244,11 @@ class Tracks:
             log.debug(f" - Found and skipped {duplicates} duplicate tracks...")
 
     def sort_videos(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
-        """Sort video tracks by bitrate, and optionally language."""
+        """Sort video tracks by resolution then bitrate, and optionally language."""
         if not self.videos:
             return
-        # bitrate
-        self.videos.sort(key=lambda x: float(x.bitrate or 0.0), reverse=True)
+        # resolution first, then bitrate (unknown-bitrate tracks still rank by resolution)
+        self.videos.sort(key=lambda x: (x.height or 0, float(x.bitrate or 0.0)), reverse=True)
         # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
@@ -276,7 +285,11 @@ class Tracks:
                 continue
             self.audio.sort(key=lambda x: not is_close_match(language, [x.language]))
 
-    def sort_subtitles(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
+    def sort_subtitles(
+        self,
+        by_language: Optional[Sequence[Union[str, Language]]] = None,
+        type_priority: Optional[Sequence[str]] = None,
+    ) -> None:
         """
         Sort subtitle tracks by various track attributes to a common P2P standard.
         You may optionally provide a sequence of languages to prioritize to the top.
@@ -291,13 +304,25 @@ class Tracks:
           - Normal
           - Hard of Hearing (SDH/CC)
           (Least to most captions expected in the subtitle)
+
+        type_priority overrides the Language Group Order with an explicit ranking of
+        "forced", "normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.
+        The first track after sorting receives the default flag at mux time, so this also
+        controls which subtitle type becomes default.
         """
         if not self.subtitles:
             return
         # language groups
         self.subtitles.sort(key=lambda x: str(x.language))
-        self.subtitles.sort(key=lambda x: x.sdh or x.cc)
-        self.subtitles.sort(key=lambda x: x.forced, reverse=True)
+        if type_priority:
+            rank = {str(t).lower(): i for i, t in enumerate(type_priority)}
+            default_rank = len(rank)
+            self.subtitles.sort(
+                key=lambda x: rank.get("forced" if x.forced else "sdh" if (x.sdh or x.cc) else "normal", default_rank)
+            )
+        else:
+            self.subtitles.sort(key=lambda x: x.sdh or x.cc)
+            self.subtitles.sort(key=lambda x: x.forced, reverse=True)
         # sections
         for language in reversed(by_language or []):
             if str(language) == "all":
@@ -371,7 +396,9 @@ class Tracks:
         base_tracks = []
         for range_type in base_ranges:
             base_tracks = [
-                v for v in tracks if v.range == range_type and (v.height in quality or int(v.width * 9 / 16) in quality)
+                v
+                for v in tracks
+                if v.range == range_type and (v.height in quality or (v.width and int(v.width * 9 / 16) in quality))
             ]
             if base_tracks:
                 break
@@ -379,7 +406,7 @@ class Tracks:
         pick = min if worst else max
         base_selected = []
         for res in quality:
-            candidates = [v for v in base_tracks if v.height == res or int(v.width * 9 / 16) == res]
+            candidates = [v for v in base_tracks if v.height == res or (v.width and int(v.width * 9 / 16) == res)]
             if candidates:
                 chosen = pick(candidates, key=lambda v: v.bitrate)
                 base_selected.append(chosen)
@@ -406,7 +433,7 @@ class Tracks:
             ]
             if not matches:
                 matches = [  # 16:9 canvas matches
-                    x for x in self.videos if int(x.width * (9 / 16)) == resolution
+                    x for x in self.videos if x.width and int(x.width * (9 / 16)) == resolution
                 ]
             selected.extend(matches[: per_resolution or None])
         self.videos = selected
@@ -416,13 +443,26 @@ class Tracks:
         tracks: list[TrackT], languages: list[str], per_language: int = 0, exact_match: bool = False
     ) -> list[TrackT]:
         distance = LANGUAGE_EXACT_DISTANCE if exact_match else LANGUAGE_MAX_DISTANCE
-        selected = []
+        selected: list[TrackT] = []
+        seen_ids: set[str] = set()
         for language in languages:
-            selected.extend(
-                [x for x in tracks if closest_supported_match(str(x.language), [language], distance)][
-                    : per_language or None
-                ]
-            )
+            matches = [x for x in tracks if closest_supported_match(str(x.language), [language], distance)]
+            if exact_match and len(matches) > 1:
+                # CLDR tag_distance measures intelligibility, not tag identity: it rates a base
+                # language and its "paradigm" regional variant as the same language (distance 0
+                # for ar/ar-EG, en/en-US, pt/pt-BR), so exact mode alone cannot separate them.
+                # Follow RFC 4647 Lookup: prefer the most specific (string-equal) tag, and fall
+                # back to the fuzzy match only when none exists (e.g. zh matches cmn).
+                want = Language.get(language).to_tag().casefold()
+                exact_hits = [x for x in matches if Language.get(str(x.language)).to_tag().casefold() == want]
+                if exact_hits:
+                    matches = exact_hits
+            # Overlapping tags can still resolve to the same physical track; dedupe by id so
+            # callers never get duplicate tracks.
+            for track in matches[: per_language or None]:
+                if track.id not in seen_ids:
+                    seen_ids.add(track.id)
+                    selected.append(track)
         return selected
 
     def mux(
@@ -433,6 +473,7 @@ class Tracks:
         audio_expected: bool = True,
         title_language: Optional[Language] = None,
         skip_subtitles: bool = False,
+        output_path: Optional[Path] = None,
     ) -> tuple[Path, int, list[str]]:
         """
         Multiplex all the Tracks into a Matroska Container file.
@@ -448,6 +489,9 @@ class Tracks:
             title_language: The title's intended language. Used to select the best video track
                 for audio metadata when multiple video tracks exist.
             skip_subtitles: Skip muxing subtitle tracks into the container.
+            output_path: Explicit destination for the muxed container. When None (default) the
+                path is derived from the first track, so callers muxing several track groups that
+                share a video list must pass distinct paths to avoid clobbering each other.
         """
         if self.videos and not self.audio and audio_expected:
             video_track = None
@@ -648,83 +692,98 @@ class Tracks:
                 ]
             )
 
-        output_path = (
-            self.videos[0].path.with_suffix(".muxed.mkv")
-            if self.videos
-            else self.audio[0].path.with_suffix(".muxed.mka")
-            if self.audio
-            else self.subtitles[0].path.with_suffix(".muxed.mks")
-            if self.subtitles
-            else chapters_path.with_suffix(".muxed.mkv")
-            if self.chapters
-            else None
-        )
+        if output_path is None:
+            output_path = (
+                self.videos[0].path.with_suffix(".muxed.mkv")
+                if self.videos
+                else self.audio[0].path.with_suffix(".muxed.mka")
+                if self.audio
+                else self.subtitles[0].path.with_suffix(".muxed.mks")
+                if self.subtitles
+                else chapters_path.with_suffix(".muxed.mkv")
+                if self.chapters
+                else None
+            )
         if not output_path:
             raise ValueError("No tracks provided, at least one track must be provided.")
 
-        debug_logger = get_debug_logger()
-        if debug_logger:
-            debug_logger.log(
-                level="DEBUG",
-                operation="mux_start",
-                message="Starting mkvmerge muxing",
-                context={
-                    "title": title,
-                    "output_path": str(output_path),
-                    "video_count": len(self.videos),
-                    "audio_count": len(self.audio),
-                    "subtitle_count": len(self.subtitles),
-                    "attachment_count": len(self.attachments),
-                    "has_chapters": bool(self.chapters),
-                    "video_tracks": [
-                        {"id": v.id, "codec": getattr(v, "codec", None), "language": str(v.language)}
-                        for v in self.videos
-                    ],
-                    "audio_tracks": [
-                        {"id": a.id, "codec": getattr(a, "codec", None), "language": str(a.language)}
-                        for a in self.audio
-                    ],
-                    "subtitle_tracks": [
-                        {"id": s.id, "codec": getattr(s, "codec", None), "language": str(s.language)}
-                        for s in self.subtitles
-                    ],
-                },
-            )
+        full_command = [*cl, "--output", str(output_path), "--gui-mode"]
+
+        log_event(
+            "mux_start",
+            level="INFO",
+            message=(f"Muxing {len(self.videos)}V/{len(self.audio)}A/{len(self.subtitles)}S -> {output_path.name}"),
+            context={
+                "title": title,
+                "output_path": str(output_path),
+                "muxer": str(binaries.MKVToolNix),
+                "command": full_command,
+                "video_count": len(self.videos),
+                "audio_count": len(self.audio),
+                "subtitle_count": len(self.subtitles),
+                "attachment_count": len(self.attachments),
+                "has_chapters": bool(self.chapters),
+                "video_tracks": [
+                    {"id": v.id, "codec": getattr(v, "codec", None), "language": str(v.language)} for v in self.videos
+                ],
+                "audio_tracks": [
+                    {"id": a.id, "codec": getattr(a, "codec", None), "language": str(a.language)} for a in self.audio
+                ],
+                "subtitle_tracks": [
+                    {"id": s.id, "codec": getattr(s, "codec", None), "language": str(s.language)}
+                    for s in self.subtitles
+                ],
+            },
+        )
 
         # let potential failures go to caller, caller should handle
         try:
             errors = []
-            p = subprocess.Popen([*cl, "--output", str(output_path), "--gui-mode"], text=True, stdout=subprocess.PIPE)
+            warnings = []
+            mux_start_time = time.monotonic()
+            p = subprocess.Popen(full_command, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE)
             for line in iter(p.stdout.readline, ""):
                 if line.startswith("#GUI#error") or line.startswith("#GUI#warning"):
                     errors.append(line)
+                    if line.startswith("#GUI#warning"):
+                        warnings.append(line.strip())
                 if "progress" in line:
                     progress(total=100, completed=int(line.strip()[14:-1]))
 
             returncode = p.wait()
+            mux_duration_ms = round((time.monotonic() - mux_start_time) * 1000, 1)
+            output_size = output_path.stat().st_size if output_path and output_path.exists() else 0
 
-            if debug_logger:
-                if returncode != 0 or errors:
-                    debug_logger.log(
-                        level="ERROR",
-                        operation="mux_failed",
-                        message=f"mkvmerge exited with code {returncode}",
-                        context={
-                            "returncode": returncode,
-                            "output_path": str(output_path),
-                            "errors": errors,
-                        },
-                    )
-                else:
-                    debug_logger.log(
-                        level="DEBUG",
-                        operation="mux_complete",
-                        message="mkvmerge muxing completed successfully",
-                        context={
-                            "output_path": str(output_path),
-                            "output_exists": output_path.exists() if output_path else False,
-                        },
-                    )
+            if returncode != 0 or errors:
+                log_event(
+                    "mux_failed",
+                    level="ERROR",
+                    message=f"mkvmerge exited with code {returncode}",
+                    context={
+                        "returncode": returncode,
+                        "output_path": str(output_path),
+                        "errors": errors,
+                        "warnings": warnings,
+                        "duration_ms": mux_duration_ms,
+                    },
+                )
+            else:
+                log_event(
+                    "mux_complete",
+                    level="INFO",
+                    message=(
+                        f"Muxed {output_path.name} ({output_size} bytes) in {mux_duration_ms}ms"
+                        + (f" with {len(warnings)} warning(s)" if warnings else "")
+                    ),
+                    context={
+                        "output_path": str(output_path),
+                        "output_exists": output_path.exists() if output_path else False,
+                        "output_size": output_size,
+                        "duration_ms": mux_duration_ms,
+                        "returncode": returncode,
+                        "warnings": warnings,
+                    },
+                )
 
             return output_path, returncode, errors
         finally:

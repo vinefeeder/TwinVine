@@ -95,7 +95,7 @@ class MonaLisaCDM:
 
     @staticmethod
     def get_worker_path() -> Optional[Path]:
-        """Get ML-Worker binary path from the envied.binaries system."""
+        """Get ML-Worker binary path from the unshackle binaries system."""
         if binaries.ML_Worker:
             return Path(binaries.ML_Worker)
         return None
