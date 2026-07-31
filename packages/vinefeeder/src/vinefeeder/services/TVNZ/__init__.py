@@ -19,7 +19,43 @@ from envied.core import binaries
 from envied.core.config import config as envied_config
 from envied.core.proxies import Basic, Gluetun, Hola, NordVPN, SurfsharkVPN, WindscribeVPN
 from envied.core.titles import Movies, Series
-from envied.services.TVNZ import TVNZ as EnviedTVNZ
+#from envied.services.TVNZ import TVNZ as EnviedTVNZ
+
+import sys
+from importlib import import_module
+from importlib.util import find_spec
+from pathlib import Path
+
+# special import routine for services in git.gay _repos
+# Locate the installed/local envied.services directory.
+services_spec = find_spec("envied.services")
+
+if services_spec is None or not services_spec.submodule_search_locations:
+    raise ImportError("Could not locate the envied.services package")
+
+services_directory = Path(
+    next(iter(services_spec.submodule_search_locations))
+)
+
+repo_directory = (
+    services_directory
+    / "_repos"
+    / "git.gay__vinefeeder__twinvine-services"
+)
+
+if not repo_directory.is_dir():
+    raise ImportError(f"Repository directory not found: {repo_directory}")
+
+repo_path = str(repo_directory)
+
+if repo_path not in sys.path:
+    sys.path.insert(0, repo_path)
+
+# Import the TVNZ package, then extract its TVNZ class.
+tvnz_module = import_module("TVNZ")
+EnviedTVNZ = tvnz_module.TVNZ
+
+
 
 console = Console()
 
