@@ -5,7 +5,7 @@ Temp/
 packages/envied/src/envied/logs/
 packages/envied/src/envied/envied.yaml
 packages/envied/src/envied/cache/TVNZ/local_storage.json
-#packages/envied/src/envied/services
+packages/envied/src/envied/services
 packages/envied/src/Cookies/*
 images/*
 tools/
@@ -16,14 +16,14 @@ key_store.db-wal
 key_store.db
 # Byte-compiled / optimized / DLL files
 __pycache__/
-#*.py[codz]
-#*$py.class
+*.py[codz]
+*$py.class
 
 # C extensions
-#*.so
+*.so
 
 # Distribution / packaging
-#.Python
+.Python
 build/
 develop-eggs/
 dist/
@@ -221,7 +221,3 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-
-# git
-.git
-.gitignore
