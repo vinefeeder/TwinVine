@@ -26,7 +26,7 @@ from importlib import import_module
 from importlib.util import find_spec
 from pathlib import Path
 
-# special import routine for services in git.gay _repos
+# special import routine for services in git.gay _reposcd
 # Locate the installed/local envied.services directory.
 services_spec = find_spec("envied.services")
 

@@ -1,0 +1,1 @@
+rsync -av --exclude='**/__pycache__' --exclude='*.json' --exclude='.git/' --exclude='Cache/' --exclude='Logs/' --exclude='logs/' --exclude='Temp/' --exclude='.venv/' --exclude='.vscode/' --exclude='Cookies/*' --exclude='envied.yaml' --exclude='_repos/' --exclude='services/' --exclude='.rsync/' .  /home/angela/Programming/gits/staging/TwinVine/
