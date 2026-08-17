@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import yaml
 from appdirs import AppDirs
@@ -110,13 +110,19 @@ class Config:
             self.decryption_map = {}
             self.decryption = decryption_cfg or "shaka"
 
+        self.theme: str = kwargs.get("theme") or "default"
         self.set_terminal_bg: bool = kwargs.get("set_terminal_bg", False)
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)
         self.tag_imdb_tmdb: bool = kwargs.get("tag_imdb_tmdb", True)
-        self.imdb_api_enabled: bool = kwargs.get("imdb_api_enabled", False)
         self.omdb_api_key: str = kwargs.get("omdb_api_key") or ""
         self.tmdb_api_key: str = kwargs.get("tmdb_api_key") or ""
+        self.tvdb_api_key: str = kwargs.get("tvdb_api_key") or ""
+        self.tvdb_pin: str = kwargs.get("tvdb_pin") or ""
+        self.tvdb_order: str = (kwargs.get("tvdb_order") or "").lower()
+        self.metadata_providers: Union[list, dict] = kwargs.get("metadata_providers") or []
+        self.anilist_title_language: str = (kwargs.get("anilist_title_language") or "english").lower()
+        self.disable_metadata: bool = kwargs.get("disable_metadata", False)
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.ipinfo_api_key: str = kwargs.get("ipinfo_api_key") or ""
@@ -126,6 +132,7 @@ class Config:
         self.redact_paths: bool = kwargs.get("redact_paths", True)
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
+        self.tag_rules: list = kwargs.get("tag_rules") or []
         self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
@@ -168,6 +175,8 @@ class Config:
             "episode",
             "season_episode",
             "episode_name",
+            "part",
+            "absolute",
             "date",
             "quality",
             "resolution",
@@ -199,6 +208,7 @@ class Config:
             "edition",
             "repack",
             "lang_tag",
+            "title_type",
         }
 
         unsafe_chars = r'[<>:"/\\|?*]'

@@ -11,10 +11,12 @@ import shutil
 import subprocess
 import sys
 import time
+from collections import Counter
 from collections.abc import Iterable
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from datetime import date, timedelta
 from functools import partial
 from http.cookiejar import CookieJar, MozillaCookieJar
 from itertools import product
@@ -26,8 +28,9 @@ from uuid import UUID
 import click
 import yaml
 from click.core import ParameterSource
-from langcodes import Language
+from langcodes import Language, tag_is_valid
 from pymediainfo import MediaInfo
+from rich import box
 from rich.console import Group
 from rich.padding import Padding
 from rich.panel import Panel
@@ -45,6 +48,7 @@ from envied.core.config import config, resolve_cdm_name, resolve_decryption
 from envied.core.console import GradientPulseBarColumn, SyncLive, console
 from envied.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from envied.core.credential import Credential
+from envied.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
 from envied.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
 from envied.core.events import events
 from envied.core.music import (
@@ -57,9 +61,12 @@ from envied.core.music import (
     write_music_manifest,
     write_music_metadata,
 )
+from envied.core.providers.anilist import parse_anilist_ref
+from envied.core.providers.tvdb import SEASON_TYPES, _parse_int
 from envied.core.proxies import Basic, ExpressVPN, Gluetun, Hola, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN
 from envied.core.service import Service
 from envied.core.services import Services
+from envied.core.temp import with_task_temp
 from envied.core.title_cacher import get_account_hash
 from envied.core.titles import Movie, Movies, Music, Series, Song, Title_T
 from envied.core.titles.episode import Episode
@@ -70,13 +77,19 @@ from envied.core.tracks.hybrid import Hybrid
 from envied.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
 from envied.core.utilities import (
     as_requested,
+    embedded_audio_langs,
+    excluded_language_tags,
     find_font_with_fallbacks,
     find_missing_langs,
     get_debug_logger,
     get_system_fonts,
     init_debug_logger,
     is_close_match,
+    is_exact_match,
+    keep_forced_subtitle,
     log_event,
+    partition_exclusions,
+    resolve_sort_langs,
     suggest_font_packages,
     time_elapsed_since,
 )
@@ -112,9 +125,63 @@ class SkippedSubtitle(TypedDict):
 DL_OPTION_ALIASES = {"range": "range_", "list": "list_"}
 
 
+def parse_language(tag: Optional[str]) -> Optional[Language]:
+    """A provider's original-language tag as a Language, or None if it is absent or not a real tag."""
+    tag = (tag or "").strip()
+    if not tag or not tag_is_valid(tag) or tag.startswith("und"):
+        return None
+    return Language.get(tag)
+
+
 def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
     """Map aliased config keys (e.g. ``range``) to their Click parameter names (``range_``)."""
     return {DL_OPTION_ALIASES.get(key, key): value for key, value in dl_config.items()}
+
+
+ID_PROVIDER_KEYS = {"tmdb": "tmdb_api_key", "tvdb": "tvdb_api_key", "omdb": "omdb_api_key"}
+
+
+def validate_metadata_ids(
+    tmdb_id: Optional[int],
+    imdb_id: Optional[str],
+    tvdb_id: Optional[int],
+    anilist_id: Optional[Union[int, str]] = None,
+) -> None:
+    """Reject ID flags that conflict, or that no configured provider could ever resolve.
+
+    --anilist stays outside the mutual exclusion: AniList knows no western IDs, so pairing
+    it with one of the other three is how an anime title gets both.
+    """
+    if anilist_id and not parse_anilist_ref(anilist_id):
+        raise click.UsageError("--anilist takes an AniList ID like 21, or a MyAnimeList ID like mal:21.")
+
+    supplied = [
+        (flag, value) for flag, value in (("--tmdb", tmdb_id), ("--imdb", imdb_id), ("--tvdb", tvdb_id)) if value
+    ]
+    if len(supplied) > 1:
+        raise click.UsageError(
+            f"{', '.join(flag for flag, _ in supplied)} cannot be used together. "
+            "Give one ID and unshackle resolves the others from it."
+        )
+    if not supplied:
+        return
+
+    flag, _ = supplied[0]
+    id_kind = flag.lstrip("-")
+    ordered = {cls.NAME: cls for kind in ("tv", "movie") for cls in providers.provider_order(kind)}
+    consumers = [cls for cls in ordered.values() if cls.ID_KIND == id_kind]
+    if any(cls().is_available() for cls in consumers):
+        return
+
+    if consumers:
+        keys = sorted({ID_PROVIDER_KEYS[cls.NAME] for cls in consumers if cls.NAME in ID_PROVIDER_KEYS})
+        raise click.UsageError(
+            f"{flag} needs the {consumers[0].NAME} provider. Set {' or '.join(keys)} in your config."
+        )
+    names = sorted({cls.NAME for cls in providers.REGISTRY.values() if cls.ID_KIND == id_kind})
+    raise click.UsageError(
+        f"{flag} needs the {' or '.join(names)} provider, which your metadata_providers config leaves out."
+    )
 
 
 def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Video]]:
@@ -517,7 +584,7 @@ class dl:
         "--lang",
         type=LANGUAGE_RANGE,
         default="orig",
-        help="Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English.",
+        help="Language(s) wanted for Video and Audio (comma-separated). Use 'orig' to select the original language, e.g. 'orig,en' for both original and English. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
     @click.option(
         "--latest-episode",
@@ -530,16 +597,22 @@ class dl:
         "--v-lang",
         type=LANGUAGE_RANGE,
         default=[],
-        help="Language wanted for Video. You would use this if the video language doesn't match the audio.",
+        help="Language wanted for Video. You would use this if the video language doesn't match the audio. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
     @click.option(
         "-al",
         "--a-lang",
         type=LANGUAGE_RANGE,
         default=[],
-        help="Language wanted for Audio, overrides -l/--lang for audio tracks.",
+        help="Language wanted for Audio, overrides -l/--lang for audio tracks. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
     )
-    @click.option("-sl", "--s-lang", type=LANGUAGE_RANGE, default=["all"], help="Language wanted for Subtitles.")
+    @click.option(
+        "-sl",
+        "--s-lang",
+        type=LANGUAGE_RANGE,
+        default=["all"],
+        help="Language wanted for Subtitles. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
+    )
     @click.option(
         "--require-subs",
         type=LANGUAGE_RANGE,
@@ -547,6 +620,13 @@ class dl:
         help="Required subtitle languages. Downloads all subtitles only if these languages exist. Cannot be used with --s-lang.",
     )
     @click.option("-fs", "--forced-subs", is_flag=True, default=False, help="Include forced subtitle tracks.")
+    @click.option(
+        "-fsl",
+        "--forced-s-lang",
+        type=LANGUAGE_RANGE,
+        default=[],
+        help="Languages wanted for forced subtitles, implies -fs. Keeps forced subs only in these languages. Prefix a value with '-' to exclude it, e.g. 'all,-es'.",
+    )
     @click.option(
         "--exact-lang",
         is_flag=True,
@@ -560,7 +640,10 @@ class dl:
         help="Proxy URI to use. If a 2-letter country is provided, it will try to get a proxy from the config.",
     )
     @click.option(
-        "--tag", type=str, default=None, help="Set the Group Tag to be used, overriding the one in config if any."
+        "--tag",
+        type=str,
+        default=None,
+        help="Set the Group Tag to be used, overriding the config tag and any tag rules.",
     )
     @click.option("--repack", is_flag=True, default=False, help="Add REPACK tag to the output filename.")
     @click.option(
@@ -584,27 +667,55 @@ class dl:
         "tmdb_id",
         type=int,
         default=None,
-        help="Use this TMDB ID for tagging instead of automatic lookup.",
+        help="Use this TMDB ID for tagging instead of an automatic search. Add --enrich to also take "
+        "its title, year and original language.",
     )
     @click.option(
-        "--animeapi",
-        "animeapi_id",
+        "--tvdb",
+        "tvdb_id",
+        type=int,
+        default=None,
+        help="Use this TVDB ID for --tvdb-order and tagging instead of looking the series up "
+        "automatically. Add --enrich to also take its title, year and original language.",
+    )
+    @click.option(
+        "--tvdb-order",
+        type=click.Choice(SEASON_TYPES, case_sensitive=False),
+        default=None,
+        help="Renumber episodes to a TVDB season order. Services normally use 'official' (aired) order; "
+        "a series' Streaming Order is 'alternate'. Defaults to the tvdb_order config option.",
+    )
+    @click.option(
+        "--anilist",
+        "anilist_id",
         type=str,
         default=None,
-        help="Anime database ID via AnimeAPI (e.g. mal:12345, anilist:98765). Defaults to MAL if no prefix.",
+        help="Use this AniList ID for tagging instead of an automatic search, or a MyAnimeList ID as mal:12345. "
+        "Add --enrich to also take its title, year and original language. Combines with one of "
+        "--tmdb, --imdb or --tvdb, which AniList does not know.",
     )
     @click.option(
         "--enrich",
         is_flag=True,
         default=False,
-        help="Override show title and year from external source. Requires --tmdb, --imdb, or --animeapi.",
+        help=(
+            "Overwrite the show title, year and original language with the external source's. "
+            "Requires --tmdb, --imdb, --tvdb, or --anilist."
+        ),
+    )
+    @click.option(
+        "--daily",
+        is_flag=True,
+        default=False,
+        help="Treat the title as daily/date-based content and fill missing air dates from TVDB during --enrich.",
     )
     @click.option(
         "--imdb",
         "imdb_id",
         type=str,
         default=None,
-        help="Use this IMDB ID (e.g. tt1375666) for tagging instead of automatic lookup.",
+        help="Use this IMDB ID (e.g. tt1375666) for tagging instead of an automatic search. Add --enrich "
+        "to also take its title, year and original language.",
     )
     @click.option(
         "--sub-format",
@@ -677,7 +788,7 @@ class dl:
         "--no-proxy-download",
         is_flag=True,
         default=False,
-        help="Bypass proxy for segment downloads only. Manifest, license, and auth still use proxy.",
+        help="Bypass proxy for all downloads. Manifest, license, and auth still use proxy.",
     )
     @click.option("--no-folder", is_flag=True, default=False, help="Disable folder creation for TV Shows.")
     @click.option(
@@ -691,6 +802,16 @@ class dl:
         help="Max workers/threads to download with per-track. Default depends on the downloader.",
     )
     @click.option("--downloads", type=int, default=1, help="Amount of tracks to download concurrently.")
+    @click.option(
+        "--speed-limit",
+        "speed_limit",
+        type=str,
+        default=None,
+        metavar="SPEED",
+        help="Cap total download speed across all downloads combined, e.g. 500k, 5M, 1.5G or plain "
+        "bytes/sec (5M = 5.0 MB/s; bytes, not bits). "
+        "'off' disables a limit configured in the dl: config block.",
+    )
     @click.option(
         "-o",
         "--output",
@@ -749,8 +870,11 @@ class dl:
         tag: Optional[str] = None,
         tmdb_id: Optional[int] = None,
         imdb_id: Optional[str] = None,
-        animeapi_id: Optional[str] = None,
+        tvdb_id: Optional[int] = None,
+        tvdb_order: Optional[str] = None,
+        anilist_id: Optional[Union[int, str]] = None,
         enrich: bool = False,
+        daily: bool = False,
         output_dir: Optional[Path] = None,
         *_: Any,
         **__: Any,
@@ -787,30 +911,36 @@ class dl:
         tag = ctx.params.get("tag", tag)
         tmdb_id = ctx.params.get("tmdb_id", tmdb_id)
         imdb_id = ctx.params.get("imdb_id", imdb_id)
-        animeapi_id = ctx.params.get("animeapi_id", animeapi_id)
+        tvdb_id = ctx.params.get("tvdb_id", tvdb_id)
+        tvdb_order = ctx.params.get("tvdb_order", tvdb_order)
+        anilist_id = ctx.params.get("anilist_id", anilist_id)
         enrich = ctx.params.get("enrich", enrich)
+        daily = ctx.params.get("daily", daily)
         output_dir = ctx.params.get("output_dir", output_dir)
 
         self.profile = profile
         self.proxy_requested = bool(proxy)
+        validate_metadata_ids(tmdb_id, imdb_id, tvdb_id, anilist_id)
         self.tmdb_id = tmdb_id
         self.imdb_id = imdb_id
+        self.tvdb_id = tvdb_id
+        self.anilist_id = anilist_id
+        self.tvdb_order = (tvdb_order or config.tvdb_order or "").lower()
+        if self.tvdb_order and self.tvdb_order not in SEASON_TYPES:
+            raise click.UsageError(f"tvdb_order must be one of {', '.join(SEASON_TYPES)}, not {self.tvdb_order!r}")
         self.enrich = enrich
-        self.animeapi_title: Optional[str] = None
+        self.daily = daily
         self.output_dir = output_dir
+        self.service_anime = False
+        self.service_daily = False
 
-        if animeapi_id:
-            from envied.core.utils.animeapi import resolve_animeapi
+        if self.enrich and not (self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id):
+            raise click.UsageError(
+                "--enrich requires --tmdb, --imdb, --tvdb, or --anilist to provide a metadata source."
+            )
 
-            anime_title, anime_ids = resolve_animeapi(animeapi_id)
-            self.animeapi_title = anime_title
-            if not self.tmdb_id and anime_ids.tmdb_id:
-                self.tmdb_id = anime_ids.tmdb_id
-            if not self.imdb_id and anime_ids.imdb_id:
-                self.imdb_id = anime_ids.imdb_id
-
-        if self.enrich and not (self.tmdb_id or self.imdb_id or self.animeapi_title):
-            raise click.UsageError("--enrich requires --tmdb, --imdb, or --animeapi to provide a metadata source.")
+        if self.daily and not self.enrich:
+            self.log.warning("--daily fills air dates from TVDB only with --enrich. A service can set them itself.")
 
         # Initialize debug logger with service name if debug logging is enabled
         if config.debug or logging.root.level == logging.DEBUG:
@@ -835,7 +965,7 @@ class dl:
                         "tag": tag,
                         "tmdb_id": self.tmdb_id,
                         "imdb_id": self.imdb_id,
-                        "animeapi_id": animeapi_id,
+                        "anilist_id": anilist_id,
                         "enrich": enrich,
                         "cli_params": {
                             k: v
@@ -847,7 +977,7 @@ class dl:
                                 "tag",
                                 "tmdb_id",
                                 "imdb_id",
-                                "animeapi_id",
+                                "anilist_id",
                                 "enrich",
                             ]
                         },
@@ -1204,11 +1334,13 @@ class dl:
 
         if tag:
             config.tag = tag
+            config.tag_rules = []
 
         # needs to be added this way instead of @cli.result_callback to be
         # able to keep `self` as the first positional
         self.cli._result_callback = self.result
 
+    @with_task_temp
     def result(
         self,
         service: Service,
@@ -1231,6 +1363,7 @@ class dl:
         s_lang: list[str],
         require_subs: list[str],
         forced_subs: bool,
+        forced_s_lang: list[str],
         exact_lang: bool,
         sub_format: Optional[Union[Subtitle.Codec, str]],
         video_only: bool,
@@ -1258,6 +1391,7 @@ class dl:
         downloads: int,
         worst: bool,
         best_available: bool,
+        speed_limit: Optional[str] = None,
         split_audio: Optional[bool] = None,
         merge_video: Optional[bool] = None,
         real_video_bitrate: bool = False,
@@ -1268,12 +1402,69 @@ class dl:
     ) -> None:
         self.tmdb_searched = False
         self.search_source = None
+        self.service_anime = bool(getattr(service, "ANIME", False))
+        self.service_daily = bool(getattr(service, "DAILY", False))
         self.server_cdm = getattr(service, "_server_cdm", False)
-        self._remote_service = service if self.server_cdm else None
+        self._remote_service = service if hasattr(service, "_server_cdm") else None
         start_time = time.time()
+
+        lang, lang_excl = partition_exclusions(lang)
+        v_lang, v_lang_excl = partition_exclusions(v_lang)
+        a_lang, a_lang_excl = partition_exclusions(a_lang)
+        s_lang, s_lang_excl = partition_exclusions(s_lang)
+        forced_s_lang, fsl_excl = partition_exclusions(forced_s_lang)
+        for flag, excludes in (
+            ("-l/--lang", lang_excl),
+            ("-vl/--v-lang", v_lang_excl),
+            ("-al/--a-lang", a_lang_excl),
+            ("-sl/--s-lang", s_lang_excl),
+            ("-fsl/--forced-s-lang", fsl_excl),
+        ):
+            if any(token.lower() == "all" for token in excludes):
+                self.log.error(f"{flag}: 'all' cannot be excluded. Name the languages to exclude instead.")
+                sys.exit(1)
+        # exclusion-only use falls back to the flag's own default; -vl/-al have none, they cascade to -l
+        if lang_excl and not lang:
+            lang = ["orig"]
+        if s_lang_excl and not s_lang:
+            s_lang = ["all"]
+        # an override that names languages replaces -l entirely, so it must not inherit its exclusions
+        video_excl = list(dict.fromkeys(v_lang_excl + ([] if v_lang else lang_excl)))
+        audio_excl = list(dict.fromkeys(a_lang_excl + ([] if a_lang else lang_excl)))
+
+        ctx = getattr(service, "ctx", None)
+        parent_params = ctx.parent.params if ctx and ctx.parent else None
+        if parent_params is not None:
+            # services read the raw ctx params, they must never see a '-xx' token
+            for name, includes, excludes in (
+                ("lang", lang, lang_excl),
+                ("v_lang", v_lang, v_lang_excl),
+                ("a_lang", a_lang, a_lang_excl),
+                ("s_lang", s_lang, s_lang_excl),
+                ("forced_s_lang", forced_s_lang, fsl_excl),
+            ):
+                if excludes and name in parent_params:
+                    parent_params[name] = includes
+
+        if forced_s_lang or fsl_excl:
+            # services read forced_subs from raw ctx params, so the implication must be pushed there too
+            forced_subs = True
+            if "all" in forced_s_lang:
+                forced_s_lang = []
+            if parent_params is not None:
+                parent_params["forced_subs"] = True
 
         if skip_dl:
             DOWNLOAD_LICENCE_ONLY.set()
+
+        try:
+            speed_limit_bps = parse_speed_limit(speed_limit)
+        except ValueError as e:
+            self.log.error(str(e))
+            sys.exit(1)
+        set_speed_limit(speed_limit_bps)
+        if speed_limit_bps:
+            self.log.info(f"Speed limit: {format_speed(speed_limit_bps)}")
 
         if export:
             config.directories.exports.mkdir(parents=True, exist_ok=True)
@@ -1440,45 +1631,56 @@ class dl:
 
             enrich_title: Optional[str] = None
             enrich_year: Optional[int] = None
+            enrich_lang: Optional[Language] = None
 
-            if self.animeapi_title:
-                enrich_title = self.animeapi_title
+            enrich_result = providers.resolve_by_ids(
+                self.tmdb_id,
+                self.imdb_id,
+                self.tvdb_id,
+                self.anilist_id,
+                kind=kind,
+                title_cacher=title_cacher,
+                cache_title_id=cache_title_id,
+                cache_region=cache_region,
+                cache_account_hash=cache_account_hash,
+                anime=self.anime_hint(sample_title),
+            )
+            if enrich_result:
+                enrich_title = enrich_result.title
+                enrich_year = enrich_result.year
+                enrich_lang = parse_language(enrich_result.original_language)
 
-            if self.tmdb_id:
-                if not enrich_title:
-                    enrich_title = providers.get_title_by_id(
-                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                    )
-                enrich_year = providers.get_year_by_id(
-                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                )
-            elif self.imdb_id:
-                imdbapi = providers.get_provider("imdbapi")
-                if imdbapi:
-                    imdb_result = imdbapi.get_by_id(self.imdb_id, kind)
-                    if imdb_result:
-                        if not enrich_title:
-                            enrich_title = imdb_result.title
-                        enrich_year = imdb_result.year
+            if enrich_lang:
+                self.log.info(f"Original language from metadata: {enrich_lang}")
+            if not (enrich_title or enrich_year or enrich_lang):
+                self.log.warning("--enrich found no metadata. Is the provider's API key configured?")
+            elif missing := [
+                name
+                for name, value in (("title", enrich_title), ("year", enrich_year), ("language", enrich_lang))
+                if not value
+            ]:
+                self.log.warning(f"--enrich source gave no {', '.join(missing)}. Those fields are unchanged.")
 
-            if enrich_title or enrich_year:
-                if isinstance(titles, (Series, Movies)):
-                    for t in titles:
-                        if enrich_title:
-                            if isinstance(t, Episode):
-                                t.title = enrich_title
-                            else:
-                                t.name = enrich_title
-                        if enrich_year and not t.year:
-                            t.year = enrich_year
-                else:
+            if enrich_title or enrich_year or enrich_lang:
+                for t in titles if isinstance(titles, (Series, Movies)) else [titles]:
                     if enrich_title:
-                        if isinstance(titles, Episode):
-                            titles.title = enrich_title
+                        if isinstance(t, Episode):
+                            t.title = enrich_title
                         else:
-                            titles.name = enrich_title
-                    if enrich_year and not titles.year:
-                        titles.year = enrich_year
+                            t.name = enrich_title
+                    if enrich_year:
+                        t.year = enrich_year
+                    if enrich_lang:
+                        t.language = enrich_lang
+
+            if isinstance(titles, Series):
+                enrich_tvdb_id = self.tvdb_id or (enrich_result.external_ids.tvdb_id if enrich_result else None)
+                self.fill_absolute_numbers(titles, enrich_tvdb_id)
+                if any(self.daily_hint(t) for t in titles):
+                    self.fill_air_dates(titles, enrich_tvdb_id)
+
+        if self.tvdb_order and isinstance(titles, Series):
+            titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)
 
         music_mode = isinstance(titles, Music)
         music_collection_mode = (
@@ -1565,11 +1767,12 @@ class dl:
                     # Note: Headers are not mapped to actual title indices
 
                 # Format display name
-                display_name = ((t.name[:30].rstrip() + "…") if len(t.name) > 30 else t.name) if t.name else None
+                display_name = ((t.name[:30].rstrip() + "...") if len(t.name) > 30 else t.name) if t.name else None
 
                 # Apply indentation only for multiple seasons
                 prefix = " " if multiple_seasons else ""
-                option_text = f"{prefix}{t.number}" + (f". {display_name}" if t.name else "")
+                part_label = f".{t.part}" if t.part is not None else ""
+                option_text = f"{prefix}{t.number}{part_label}" + (f". {display_name}" if t.name else "")
 
                 selection_titles.append(option_text)
                 current_ui_idx = len(selection_titles) - 1
@@ -1745,6 +1948,18 @@ class dl:
                             )
                             sys.exit(1)
 
+                    song_excl = [
+                        str(song.language) if t == "orig" else t for t in audio_excl if t != "orig" or song.language
+                    ]
+                    if song_excl:
+                        drop = excluded_language_tags(song_excl, [t.language for t in song.tracks.audio], exact_lang)
+                        song.tracks.select_audio(lambda x: str(x.language) not in drop)
+                        if not song.tracks.audio:
+                            self.log.error(
+                                f"Every Audio Track for {song.name} was excluded by -{', -'.join(song_excl)}..."
+                            )
+                            sys.exit(1)
+
                     audio_languages = a_lang or lang
                     if audio_languages:
                         processed_lang = []
@@ -1788,8 +2003,12 @@ class dl:
                         song.tracks.add(service.get_tracks(song), warn_only=True)
                         song.tracks.chapters = service.get_chapters(song)
                         song.tracks.sort_audio(
-                            by_language=a_lang or lang,
+                            by_language=resolve_sort_langs(
+                                [*(config.audio.get("language_priority") or []), *(a_lang or lang)],
+                                song.language,
+                            ),
                             codec_priority=config.audio.get("codec_priority"),
+                            exact_match=exact_lang,
                         )
                         select_music_audio(song)
                         if not song.tracks.audio:
@@ -2132,12 +2351,15 @@ class dl:
         if music_collection_mode:
             raise click.ClickException("Music collections require grouped audio downloads.")
 
+        base_selection = (v_lang, a_lang, s_lang, range_)
+
         for i, title in enumerate(titles):
+            v_lang, a_lang, s_lang, range_ = base_selection
             if isinstance(title, Episode) and latest_episode and latest_episode_id:
                 # If --latest-episode is set, only process the latest episode
                 if f"{title.season}x{title.number}" != latest_episode_id:
                     continue
-            elif isinstance(title, Episode) and wanted and f"{title.season}x{title.number}" not in wanted:
+            elif isinstance(title, Episode) and wanted and not title.matches_wanted(wanted):
                 continue
 
             if progress_sink:
@@ -2145,7 +2367,8 @@ class dl:
                     progress_sink(
                         {
                             "title": title.title,
-                            "current_title": f"S{title.season or 0:02}E{title.number or 0:02}",
+                            "current_title": f"S{title.season or 0:02}E{title.number or 0:02}"
+                            + (f".{title.part}" if title.part is not None else ""),
                         }
                     )
                 else:
@@ -2160,20 +2383,30 @@ class dl:
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
                 tmdb_title: Optional[str] = None
-                if self.tmdb_id:
-                    tmdb_title = providers.get_title_by_id(
-                        self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                    )
-                else:
-                    result = providers.search_metadata(
-                        title.title, title.year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                    )
-                    if result and result.title and providers.fuzzy_match(result.title, title.title):
+                has_ids = bool(self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id)
+                result = providers.resolve_by_ids(
+                    self.tmdb_id,
+                    self.imdb_id,
+                    self.tvdb_id,
+                    self.anilist_id,
+                    title=title.title,
+                    year=title.year,
+                    kind=kind,
+                    title_cacher=title_cacher,
+                    cache_title_id=cache_title_id,
+                    cache_region=cache_region,
+                    cache_account_hash=cache_account_hash,
+                    anime=self.anime_hint(title),
+                )
+                if result:
+                    if has_ids:
+                        tmdb_title = result.title
+                        if not self.tmdb_id:
+                            self.tmdb_id = result.external_ids.tmdb_id
+                    elif result.title and providers.fuzzy_match(result.title, title.title):
                         self.tmdb_id = result.external_ids.tmdb_id
                         tmdb_title = result.title
                         self.search_source = result.source
-                    else:
-                        self.tmdb_id = None
                 if list_ or list_titles:
                     if self.tmdb_id:
                         console.print(
@@ -2187,8 +2420,19 @@ class dl:
                 self.tmdb_searched = True
 
             if isinstance(title, Movie) and (list_ or list_titles) and not self.tmdb_id:
-                movie_result = providers.search_metadata(
-                    title.name, title.year, "movie", title_cacher, cache_title_id, cache_region, cache_account_hash
+                movie_result = providers.resolve_by_ids(
+                    None,
+                    self.imdb_id,
+                    self.tvdb_id,
+                    self.anilist_id,
+                    title=title.name,
+                    year=title.year,
+                    kind="movie",
+                    title_cacher=title_cacher,
+                    cache_title_id=cache_title_id,
+                    cache_region=cache_region,
+                    cache_account_hash=cache_account_hash,
+                    anime=self.anime_hint(title),
                 )
                 if movie_result and movie_result.external_ids.tmdb_id:
                     console.print(
@@ -2201,7 +2445,7 @@ class dl:
                 else:
                     console.print(Padding("Search -> [bright_black]No match found[/]", (0, 5)))
 
-            if self.tmdb_id and getattr(self, "search_source", None) not in ("simkl", "imdbapi"):
+            if self.tmdb_id and getattr(self, "search_source", None) not in ("simkl", "imdb"):
                 kind = "tv" if isinstance(title, Episode) else "movie"
                 providers.fetch_external_ids(
                     self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
@@ -2318,40 +2562,33 @@ class dl:
                     )
 
             with console.status("Sorting tracks by language and bitrate...", spinner="dots"):
-                video_sort_lang = v_lang or lang
-                processed_video_sort_lang = []
-                for language in video_sort_lang:
-                    if language == "orig":
-                        if title.language:
-                            orig_lang = str(title.language)
-                            if orig_lang not in processed_video_sort_lang:
-                                processed_video_sort_lang.append(orig_lang)
-                    else:
-                        if language not in processed_video_sort_lang:
-                            processed_video_sort_lang.append(language)
+                audio_priority = config.audio.get("language_priority") or []
+                subtitle_priority = config.subtitle.get("language_priority") or []
 
-                audio_sort_lang = a_lang or lang
-                processed_audio_sort_lang = []
-                for language in audio_sort_lang:
-                    if language == "orig":
-                        if title.language:
-                            orig_lang = str(title.language)
-                            if orig_lang not in processed_audio_sort_lang:
-                                processed_audio_sort_lang.append(orig_lang)
-                    else:
-                        if language not in processed_audio_sort_lang:
-                            processed_audio_sort_lang.append(language)
-
-                title.tracks.sort_videos(by_language=processed_video_sort_lang)
-                title.tracks.sort_audio(
-                    by_language=processed_audio_sort_lang,
-                    codec_priority=config.audio.get("codec_priority"),
+                title.tracks.sort_videos(
+                    by_language=resolve_sort_langs(v_lang or lang, title.language),
+                    exact_match=exact_lang,
                 )
-                title.tracks.sort_subtitles(by_language=s_lang, type_priority=config.subtitle.get("type_priority"))
+                title.tracks.sort_audio(
+                    by_language=resolve_sort_langs([*audio_priority, *(a_lang or lang)], title.language),
+                    codec_priority=config.audio.get("codec_priority"),
+                    exact_match=exact_lang,
+                )
+                title.tracks.sort_subtitles(
+                    by_language=resolve_sort_langs([*subtitle_priority, *(s_lang or [])], title.language),
+                    type_priority=config.subtitle.get("type_priority"),
+                    group_by=config.subtitle.get("group_by"),
+                    exact_match=exact_lang,
+                )
 
             if list_:
                 available_tracks, _ = title.tracks.tree()
-                console.print(Padding(Panel(available_tracks, title="Available Tracks"), (0, 5)))
+                console.print(
+                    Padding(
+                        Panel(available_tracks, title="Available Tracks", box=box.SQUARE, border_style="bright_black"),
+                        (0, 5),
+                    )
+                )
                 continue
 
             # Determine which tracks to keep
@@ -2403,6 +2640,23 @@ class dl:
                 title.tracks.chapters = []
 
             with console.status("Selecting tracks...", spinner="dots"):
+
+                def resolve_excludes(excludes: list[str], _title: Title_T = title) -> list[str]:
+                    """Resolve 'orig' against this title. An unresolvable 'orig' excludes nothing."""
+                    resolved: list[str] = []
+                    for token in excludes:
+                        value = str(_title.language) if token == "orig" else token
+                        if token == "orig" and not _title.language:
+                            continue
+                        if value not in resolved:
+                            resolved.append(value)
+                    return resolved
+
+                video_excl_r = resolve_excludes(video_excl)
+                audio_excl_r = resolve_excludes(audio_excl)
+                s_excl_r = resolve_excludes(s_lang_excl)
+                fsl_excl_r = resolve_excludes(fsl_excl)
+
                 if isinstance(title, (Movie, Episode)):
                     # filter video tracks
                     if keep_videos and vcodec:
@@ -2447,6 +2701,15 @@ class dl:
                         )
                         if not title.tracks.videos:
                             self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
+                            sys.exit(1)
+
+                    if keep_videos and video_excl_r:
+                        drop = excluded_language_tags(
+                            video_excl_r, [t.language for t in title.tracks.videos], exact_lang
+                        )
+                        title.tracks.select_video(lambda x: str(x.language) not in drop)
+                        if not title.tracks.videos:
+                            self.log.error(f"Every Video Track was excluded by -{', -'.join(video_excl_r)}...")
                             sys.exit(1)
 
                     effective_video_lang = v_lang or lang
@@ -2726,6 +2989,15 @@ class dl:
                                 sys.exit(1)
 
                     # filter subtitle tracks
+                    fsl = [t for t in forced_s_lang if t != "orig"]
+                    if "orig" in forced_s_lang and title.language:
+                        fsl.append(str(title.language))
+                    if keep_subtitles and s_excl_r:
+                        # applies to forced subs too: an excluded language is unwanted in any form
+                        drop = excluded_language_tags(
+                            s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang
+                        )
+                        title.tracks.select_subtitles(lambda x: str(x.language) not in drop)
                     if keep_subtitles and require_subs:
                         missing_langs = [
                             lang
@@ -2741,8 +3013,6 @@ class dl:
                             f"Required languages found ({', '.join(require_subs)}), downloading all available subtitles"
                         )
                     elif keep_subtitles and s_lang and "all" not in s_lang:
-                        from envied.core.utilities import is_exact_match
-
                         match_func = is_exact_match if exact_lang else is_close_match
 
                         missing_langs = find_missing_langs(
@@ -2763,19 +3033,43 @@ class dl:
                                     self.log.warning(
                                         f"{missing_str} not found in subtitle tracks, continuing without subtitles"
                                     )
-                                    title.tracks.subtitles = []
+                                    title.tracks.select_subtitles(
+                                        lambda x: (
+                                            x.forced and keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
+                                        )
+                                    )
                             else:
                                 self.log.error(missing_str + " not found in tracks")
                                 sys.exit(1)
 
                         if s_lang and title.tracks.subtitles:
-                            title.tracks.select_subtitles(lambda x: match_func(x.language, s_lang))
+                            title.tracks.select_subtitles(
+                                lambda x: (
+                                    match_func(x.language, s_lang)
+                                    or bool(x.forced and fsl and match_func(x.language, fsl))
+                                )
+                            )
                             if not title.tracks.subtitles and not best_available:
                                 self.log.error(f"There's no {s_lang} Subtitle Track...")
                                 sys.exit(1)
 
-                    if keep_subtitles and not forced_subs:
-                        title.tracks.select_subtitles(lambda x: not x.forced)
+                    if keep_subtitles:
+                        # fsl, not forced_s_lang: unresolvable orig must keep all forced, not drop them
+                        if fsl:
+                            title.tracks.select_subtitles(
+                                lambda x: keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
+                            )
+                            if not any(x.forced for x in title.tracks.subtitles):
+                                self.log.warning(
+                                    f"No forced subtitle tracks matched --forced-s-lang ({', '.join(forced_s_lang)})"
+                                )
+                        elif not forced_subs:
+                            title.tracks.select_subtitles(lambda x: not x.forced)
+                        if fsl_excl_r:
+                            drop = excluded_language_tags(
+                                fsl_excl_r, [t.language for t in title.tracks.subtitles if t.forced], exact_lang
+                            )
+                            title.tracks.select_subtitles(lambda x: not (x.forced and str(x.language) in drop))
 
                 # filter audio tracks
                 # might have no audio tracks if part of the video, e.g. transport stream hls
@@ -2812,6 +3106,14 @@ class dl:
                         if not title.tracks.audio:
                             self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
                             sys.exit(1)
+                    if audio_excl_r:
+                        drop = excluded_language_tags(
+                            audio_excl_r, [t.language for t in title.tracks.audio], exact_lang
+                        )
+                        title.tracks.select_audio(lambda x: str(x.language) not in drop)
+                        if not title.tracks.audio:
+                            self.log.error(f"Every Audio Track was excluded by -{', -'.join(audio_excl_r)}...")
+                            sys.exit(1)
                     audio_languages = a_lang or lang
                     if audio_languages:
                         processed_lang = []
@@ -2833,10 +3135,12 @@ class dl:
                         if a_orig_token in audio_languages:
                             a_orig_token = None
 
+                        embedded_langs = embedded_audio_langs(title.tracks.videos, keep_videos)
+
                         if not any(tok in processed_lang for tok in ("best", "all")):
                             missing_a_langs = find_missing_langs(
                                 processed_lang,
-                                [a.language for a in title.tracks.audio],
+                                [a.language for a in title.tracks.audio] + embedded_langs,
                                 exact=exact_lang,
                             )
                             if missing_a_langs:
@@ -2861,8 +3165,9 @@ class dl:
                         title.tracks.audio = select_best_audio(
                             title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
                         )
-                        if not title.tracks.audio:
-                            # empty only when 'orig' was the sole request and did not resolve
+                        if not title.tracks.audio and not embedded_langs:
+                            # empty when 'orig' was the sole request, did not resolve, and the
+                            # video carries no audio of its own to fall back on
                             self.log.error(
                                 f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} "
                                 f"Audio Track, cannot continue..."
@@ -3006,6 +3311,12 @@ class dl:
                         skip_subtitle_errors=skip_subtitle_errors,
                         on_subtitle_skipped=on_subtitle_skipped,
                     )
+
+                    for attachment in title.tracks.attachments:
+                        attachment.download(
+                            attachment.session or service.session,
+                            no_proxy_download=no_proxy_download,
+                        )
 
                     if (
                         len(self.skipped_subtitles) > skipped_before
@@ -3595,7 +3906,15 @@ class dl:
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
                         self.completed_files.append(final_path)
-                        tags.tag_file(final_path, title, self.tmdb_id, self.imdb_id)
+                        tags.tag_file(
+                            final_path,
+                            title,
+                            self.tmdb_id,
+                            self.imdb_id,
+                            self.tvdb_id,
+                            self.anilist_id,
+                            self.anime_hint(title),
+                        )
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 downloaded_label = "Track" if music_mode and isinstance(title, Song) else "Title"
@@ -3621,6 +3940,196 @@ class dl:
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
 
+    def anime_hint(self, title: Optional[Title_T] = None) -> bool:
+        """Whether metadata lookups for this title should prefer AniList."""
+        per_title = getattr(title, "anime", None)
+        return self.service_anime if per_title is None else bool(per_title)
+
+    def daily_hint(self, title: Optional[Title_T] = None) -> bool:
+        """Whether this title is daily/date-based content named by air date."""
+        per_title = getattr(title, "daily", None)
+        return self.daily or (self.service_daily if per_title is None else bool(per_title))
+
+    def fill_air_dates(self, titles: Series, tvdb_id: Optional[int] = None) -> None:
+        """Fill in missing episode air dates from TVDB.
+
+        Additive only: an air date the service already set is kept.
+        """
+        tvdb = providers.get_provider("tvdb")
+        if not tvdb:
+            self.log.debug("Air dates need a tvdb_api_key in your config, skipping.")
+            return
+
+        if not tvdb_id:
+            self.log.debug("Could not resolve a TVDB ID, skipping air dates.")
+            return
+
+        wanted = [t for t in titles if self.daily_hint(t)]
+        if not wanted:
+            return
+
+        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
+        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
+        episodes = tvdb.get_episodes(tvdb_id, source_order)  # type: ignore[attr-defined]
+        if not episodes:
+            self.log.debug("TVDB listed no episodes for series %s, skipping air dates.", tvdb_id)
+            return
+
+        aired_by_key: dict[tuple[int, int], str] = {}
+        for episode in episodes:
+            season, number = _parse_int(episode.get("seasonNumber")), _parse_int(episode.get("number"))
+            aired = episode.get("aired")
+            if season is None or number is None or not aired:
+                continue
+            aired_by_key[(season, number)] = str(aired)
+
+        # TVDB carries placeholder schedule dates for unaired episodes. Stamping one would
+        # name the file with a date the episode never aired on.
+        limit = date.today() + timedelta(days=1)
+
+        filled = 0
+        for title in wanted:
+            if title.air_date is not None:
+                continue
+            aired = aired_by_key.get((title.season, title.number))
+            if not aired:
+                continue
+            try:
+                air_date = date.fromisoformat(aired[:10])
+            except ValueError:
+                continue
+            if air_date.year < 1970 or air_date > limit:
+                continue
+            title.air_date = air_date
+            filled += 1
+
+        if filled:
+            self.log.info("Filled air dates for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
+
+    def fill_absolute_numbers(self, titles: Series, tvdb_id: Optional[int] = None) -> None:
+        """Fill in missing absolute episode numbers from TVDB's absolute order.
+
+        Additive only: season and number are never written, and an absolute number the
+        service already set is kept.
+        """
+        tvdb = providers.get_provider("tvdb")
+        if not tvdb:
+            self.log.debug("Absolute episode numbers need a tvdb_api_key in your config, skipping.")
+            return
+
+        if not tvdb_id:
+            self.log.debug("Could not resolve a TVDB ID, skipping absolute episode numbers.")
+            return
+
+        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
+        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
+        if source_order == "absolute":
+            # the service already numbers in absolute order; get_order_map would return the
+            # empty same-order map, but here the episode numbers are their own fill
+            mapping = {key: (*key, None) for key in keys}
+        else:
+            mapping = tvdb.get_order_map(tvdb_id, "absolute", source_order)  # type: ignore[attr-defined]
+        if not mapping:
+            self.log.debug("TVDB has no absolute order for series %s, skipping absolute episode numbers.", tvdb_id)
+            return
+
+        filled = 0
+        for title in titles:
+            if title.absolute is not None:
+                continue
+            entry = mapping.get((title.season, title.number))
+            if not entry:
+                continue
+            title.absolute = entry[1]
+            filled += 1
+
+        if filled:
+            self.log.info("Filled absolute numbers for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
+
+    def apply_tvdb_order(
+        self,
+        titles: Series,
+        title_cacher: Any = None,
+        cache_title_id: Optional[str] = None,
+        cache_region: Optional[str] = None,
+        cache_account_hash: Optional[str] = None,
+    ) -> Series:
+        """Renumber episodes from the service's own numbering into a TVDB season order."""
+        tvdb = providers.get_provider("tvdb")
+        if not tvdb:
+            self.log.warning("--tvdb-order needs a tvdb_api_key in your config, skipping renumber.")
+            return titles
+
+        tvdb_id = self.tvdb_id
+        if not tvdb_id:
+            show = titles[0]
+            result = providers.resolve_by_ids(
+                self.tmdb_id,
+                self.imdb_id,
+                None,
+                title=show.title,
+                year=show.year,
+                kind="tv",
+                title_cacher=title_cacher,
+                cache_title_id=cache_title_id,
+                cache_region=cache_region,
+                cache_account_hash=cache_account_hash,
+            )
+            tvdb_id = result.external_ids.tvdb_id if result else None
+        if not tvdb_id:
+            self.log.warning("Could not resolve a TVDB ID for %r, skipping %s renumber.", str(titles), self.tvdb_order)
+            return titles
+        self.tvdb_id = tvdb_id  # keep the mux tag on the series the renumbering used
+
+        # parts of one episode share a (season, number) slot; without the dedupe the
+        # collision check below reads them as several episodes clashing on one slot
+        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
+        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
+        if source_order == self.tvdb_order:
+            self.log.info("%s already lists this series in TVDB %s order.", self.service, self.tvdb_order)
+            return titles
+
+        mapping = tvdb.get_order_map(tvdb_id, self.tvdb_order, source_order)  # type: ignore[attr-defined]
+        if not mapping:
+            return titles
+
+        # an unmapped episode keeps its own numbering and can land on a remapped episode's slot
+        renumbered = [mapping.get(key, (*key, None))[:2] for key in keys]
+        unmapped = sum(1 for key in keys if key not in mapping)
+        collisions = [slot for slot, count in Counter(renumbered).items() if count > 1]
+        if collisions:
+            self.log.error(
+                "TVDB's %s order does not cover %d of this series' episodes, and renumbering the rest "
+                "would give %d season/episode slot(s) two episodes each. Keeping the %s numbering "
+                "%s uses. Pick an order that covers the whole series.",
+                self.tvdb_order,
+                unmapped,
+                len(collisions),
+                source_order,
+                self.service,
+            )
+            return titles
+
+        for title in titles:
+            entry = mapping.get((title.season, title.number))
+            if not entry:
+                continue
+            title.season, title.number, tvdb_name = entry
+            if tvdb_name and not title.name:
+                title.name = tvdb_name
+
+        if unmapped:
+            self.log.warning(
+                "%d episode(s) are not in TVDB's %s order and keep their %s numbering.",
+                unmapped,
+                self.tvdb_order,
+                source_order,
+            )
+        self.log.info("Renumbered episodes from TVDB %s to %s order (ID %s).", source_order, self.tvdb_order, tvdb_id)
+
+        # Series is a SortedKeyList; renumbering in place does not re-sort it
+        return type(titles)(list(titles))
+
     @staticmethod
     def title_to_meta(title: Title_T) -> dict[str, Any]:
         """Capture the title fields needed to rebuild a Title for output naming on import."""
@@ -3642,10 +4151,19 @@ class dl:
                 year=title.year,
                 air_date=title.air_date.isoformat() if isinstance(title.air_date, date) else title.air_date,
             )
+            # conditional, so meta for a title without them is unchanged
+            if title.part is not None:
+                meta["part"] = title.part
+            if title.absolute is not None:
+                meta["absolute"] = title.absolute
+            if getattr(title, "daily", None) is not None:
+                meta["daily"] = title.daily
         elif isinstance(title, Movie):
             meta.update(type="movie", name=title.name, year=title.year)
         else:
             meta.update(type="movie", name=str(title))
+        if getattr(title, "anime", None) is not None:
+            meta["anime"] = title.anime
         return meta
 
     def write_export(self, export: Path, title: Title_T, track: AnyTrack, drm: Any = None) -> None:
@@ -3654,7 +4172,7 @@ class dl:
         Carries no session/cookies/dl-flags. Region (country code) is stored only when the
         export used ``--proxy``, as an import geofence. Each track records only the licensed
         DRM system; content keys live once under the track's ``keys``. ``drm`` may be None
-        (DRM-free track) or a DRM system without ``to_dict``/``content_keys`` (e.g. ClearKey) —
+        (DRM-free track) or a DRM system without ``to_dict``/``content_keys`` (e.g. ClearKey) -
         the track, manifest, chapter and attachment info is still exported.
         """
         with self.EXPORT_LOCK:
@@ -3744,7 +4262,8 @@ class dl:
         if not drm:
             return
 
-        server_cdm = getattr(self, "server_cdm", False)
+        svc_for_cdm = getattr(self, "_remote_service", None)
+        server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
 
         if server_cdm:
             if not drm.content_keys:

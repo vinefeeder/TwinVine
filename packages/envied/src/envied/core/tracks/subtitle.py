@@ -257,6 +257,7 @@ class Subtitle(Track):
             self.convert(Subtitle.Codec.WebVTT)
         elif self.codec == Subtitle.Codec.WebVTT:
             text = self.path.read_text("utf8")
+            text = Subtitle.strip_webvtt_timestamp_map(text)
             if self.descriptor == Track.Descriptor.DASH:
                 if len(self.data["dash"]["segment_durations"]) > 1:
                     text = merge_segmented_webvtt(
@@ -290,6 +291,9 @@ class Subtitle(Track):
                     Subtitle.filter_unwanted_cues(caption_set)
                     subtitle_text = pycaption.WebVTTWriter().write(caption_set)
                     self.path.write_text(subtitle_text, encoding="utf8")
+                except pycaption.exceptions.CaptionReadNoCaptions:
+                    # some renditions carry headers but no cues; write them out rather than fail the download
+                    self.path.write_text(text, encoding="utf8")
                 except pycaption.exceptions.CaptionReadSyntaxError:
                     # If first attempt fails, try more aggressive sanitization
                     text = Subtitle.sanitize_webvtt(text)
@@ -302,6 +306,17 @@ class Subtitle(Track):
                     except Exception:
                         # Keep the sanitized version even if parsing failed
                         self.path.write_text(text, encoding="utf8")
+
+    @staticmethod
+    def strip_webvtt_timestamp_map(text: str) -> str:
+        """
+        Remove X-TIMESTAMP-MAP header lines (RFC 8216 §3.5, HLS only).
+
+        Cue times are already absolute, but SubtitleEdit reads the header and offsets
+        every cue by it during conversion.
+        """
+        # IGNORECASE: SubtitleEdit matches the header case-insensitively, so must the strip
+        return re.sub(r"^[ \t]*X-TIMESTAMP-MAP[^\n]*\n?", "", text, flags=re.MULTILINE | re.IGNORECASE)
 
     @staticmethod
     def sanitize_webvtt_timestamps(text: str) -> str:

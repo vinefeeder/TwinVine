@@ -15,6 +15,7 @@ from envied.core.config import POSSIBLE_CONFIG_PATHS, config, config_path
 from envied.core.console import console
 from envied.core.constants import context_settings
 from envied.core.services import Services
+from envied.core.temp import TASK_PREFIX, is_stale
 
 
 def get_dependencies() -> list[dict]:
@@ -43,13 +44,6 @@ def get_dependencies() -> list[dict]:
             "binary": binaries.Mp4decrypt,
             "required": False,
             "desc": "DRM decryption",
-            "cat": "DRM",
-        },
-        {
-            "name": "ML-Worker",
-            "binary": binaries.ML_Worker,
-            "required": False,
-            "desc": "DRM licensing",
             "cat": "DRM",
         },
         # HDR Processing
@@ -94,18 +88,36 @@ def get_dependencies() -> list[dict]:
 
 
 def clear_directory(path: Path) -> tuple[int, int]:
-    """Delete a directory's contents, returning (files_removed, freed_bytes); recreates the dir."""
+    """Delete a directory's contents, returning (files_removed, freed_bytes); recreates the dir.
+
+    Skips task directories that belong to a running download.
+    """
     files_count = 0
     freed_bytes = 0
     if path.exists():
-        for entry in path.glob("**/*"):
-            if entry.is_file():
+        for entry in path.iterdir():
+            is_real_dir = entry.is_dir() and not entry.is_symlink()
+            if is_real_dir and entry.name.startswith(TASK_PREFIX) and not is_stale(entry):
+                continue
+            if is_real_dir:
+                for child in entry.glob("**/*"):
+                    if child.is_file():
+                        files_count += 1
+                        try:
+                            freed_bytes += child.stat().st_size
+                        except OSError:
+                            pass
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
                 files_count += 1
                 try:
-                    freed_bytes += entry.stat().st_size
+                    freed_bytes += entry.lstat().st_size
                 except OSError:
                     pass
-        shutil.rmtree(path, ignore_errors=True)
+                try:
+                    entry.unlink(missing_ok=True)
+                except OSError:
+                    pass
     path.mkdir(parents=True, exist_ok=True)
     return files_count, freed_bytes
 
@@ -174,6 +186,111 @@ def check() -> None:
         summary_parts.append(f"[red]Missing required: {', '.join(missing_required)}[/red]")
 
     console.print(Padding("  ".join(summary_parts), (1, 2)))
+
+
+@env.command()
+def theme() -> None:
+    """Preview the available CLI themes."""
+    import math
+
+    from rich import box
+    from rich.color import Color, blend_rgb
+    from rich.console import Group
+    from rich.panel import Panel
+    from rich.rule import Rule
+    from rich.style import Style
+    from rich.text import Text
+
+    from envied.core.themes import ALIASES, DEFAULT_THEME, PALETTES, resolve_palette
+
+    active = resolve_palette(config.theme) or PALETTES[DEFAULT_THEME]
+    for name, palette in PALETTES.items():
+        text, text2, gray, guide = palette["text"], palette["text2"], palette["gray"], palette["bright_black"]
+
+        header = Text(name, style=palette["pink"])
+        if palette == active:
+            header.append("  (active)", style=palette["green"])
+        aliases = sorted(alias for alias, target in ALIASES.items() if target == name)
+        if aliases:
+            header.append(f"  aliases: {', '.join(aliases)}", style=f"dim {gray}")
+
+        swatch = Text()
+        for role in ("red", "green", "yellow", "blue", "pink", "cyan", "text", "gray"):
+            swatch.append("██ ", style=palette[role])
+
+        docstring = Text()
+        docstring.append("Service docstrings render like this, ", style=text)
+        docstring.append("with secondary detail lines like this.", style=text2)
+
+        separator = Text("─" * 60, style=palette["dark_gray"])
+        options: list[Text] = []
+        rows = (
+            ("-q, ", "--quality ", "TEXT            ", "Video quality to download", "  [default: best]", f"dim {gray}"),
+            (
+                "-r, ",
+                "--range   ",
+                "[SDR|HDR10|DV]  ",
+                "Video color range",
+                "  [env: RANGE]",
+                f"dim {palette['yellow']}",
+            ),
+        )
+        for short, long_opt, metavar, help_text, extra, extra_style in rows:
+            row = Text()
+            row.append(short, style=palette["green"])
+            row.append(long_opt, style=text)
+            row.append(metavar, style=palette["yellow"])
+            row.append(f"  {help_text}", style=text)
+            row.append(extra, style=extra_style)
+            options.extend((row, separator))
+
+        listing = Tree(Text("1 season, S1(1)", style=text), guide_style=guide)
+        episode = listing.add(Text.assemble(("1. ", palette["blue"]), ("Pilot", text)), guide_style=guide)
+        track_rows = (
+            ("VID", "H.264 | 1920x1080 @ 4523 kb/s"),
+            ("AUD", "AAC 2.0 | en @ 192 kb/s"),
+            ("SUB", "WebVTT | en (SDH)"),
+        )
+        for kind, desc in track_rows:
+            episode.add(Text.assemble((kind, palette["pink"]), (" | ", guide), (desc, text)), guide_style=guide)
+        tracks = Panel(listing, title="Available Tracks", box=box.SQUARE, border_style=guide, expand=False)
+
+        logs = []
+        log_rows = (
+            ("INFO", palette["green"], "Downloading 3 tracks"),
+            ("WARNING", palette["yellow"], "Subtitle cues overlapped, fixed 2"),
+            ("ERROR", palette["red"], "License request denied (403)"),
+        )
+        for level, level_style, message in log_rows:
+            line = Text()
+            line.append("18:00:01 ", style=gray)
+            line.append(f"{level:<8} ", style=level_style)
+            line.append(message, style=text if level != "ERROR" else palette["red"])
+            logs.append(line)
+
+        progress = Text()
+        progress.append("Pilot  ", style=text)
+        progress.append("━" * 24, style=palette["green"])
+        progress.append("╸", style=palette["green"])
+        progress.append("━" * 14, style=guide)
+        progress.append("  62%", style=palette["yellow"])
+        progress.append("  12.4 MB/s", style=palette["cyan"])
+        progress.append("  0:00:42", style=text2)
+
+        # one frozen frame of GradientPulseBarColumn's dark_gray-to-pink cosine sweep
+        lo = Color.parse(palette["dark_gray"]).triplet
+        hi = Color.parse(palette["pink"]).triplet
+        assert lo and hi
+        lut = [Style(color=Color.from_triplet(blend_rgb(lo, hi, i / 31))) for i in range(32)]
+        pulse = Text("Muxing ", style=text)
+        for i in range(39):
+            fade = (math.cos((i - 8) * math.tau / 40.0) + 1) / 2
+            pulse.append("━", style=lut[int(fade * 31)])
+
+        block = Group(header, swatch, Text(), docstring, *options, tracks, *logs, Text(), progress, pulse)
+        console.print(Padding(block, (1, 2, 1, 2)))
+        console.print(Rule(style=guide, characters="─"))
+    console.print()
 
 
 @env.command()

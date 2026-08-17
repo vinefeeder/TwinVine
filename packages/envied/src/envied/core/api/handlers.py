@@ -2,6 +2,7 @@ import asyncio
 import enum
 import logging
 import re
+from datetime import date as date_
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
@@ -14,6 +15,7 @@ from envied.core.api.input_bridge import AuthStatus, InputBridge
 from envied.core.api.sanitize import safe_cache_key, sanitize_log
 from envied.core.config import config
 from envied.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
+from envied.core.providers.anilist import parse_anilist_ref
 from envied.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from envied.core.services import Services
 from envied.core.titles import Episode, Movie, Title_T
@@ -44,6 +46,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "s_lang": ["all"],
     "require_subs": [],
     "forced_subs": False,
+    "forced_s_lang": [],
     "exact_lang": False,
     "sub_format": None,
     "video_only": False,
@@ -74,8 +77,11 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "tag": None,
     "tmdb_id": None,
     "imdb_id": None,
-    "animeapi_id": None,
+    "tvdb_id": None,
+    "tvdb_order": None,
+    "anilist_id": None,
     "enrich": False,
+    "daily": False,
     "output_dir": None,
     "no_cache": False,
     "reset_cache": False,
@@ -90,6 +96,7 @@ LIST_HANDLER_TRANSPORT_KEYS = {
     "profile",
     "season",
     "episode",
+    "part",
     "wanted",
     "proxy",
     "no_proxy",
@@ -256,7 +263,7 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
 
     key_set: Optional[set[str]] = None
     if request:
-        secret_key = request.headers.get("X-Secret-Key")
+        secret_key = request_secret_key(request)
         if secret_key:
             users = config.serve.get("users", {})
             user_config = users.get(secret_key, {})
@@ -276,9 +283,47 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
     return list(result)
 
 
+def server_cdm_allowed(request: Optional[web.Request] = None) -> bool:
+    """Whether the calling key may have the server run the CDM licensing.
+
+    Configured keys opt in with ``server_cdm: true``; keys absent from
+    ``serve.users`` (the admin secret) keep full access.
+    """
+    if not request:
+        return True
+    secret_key = request_secret_key(request)
+    user_config = config.serve.get("users", {}).get(secret_key)
+    if user_config is None:
+        return True
+    return bool(user_config.get("server_cdm", False))
+
+
+JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Secret-Key, Authorization",
+    "Access-Control-Max-Age": "3600",
+}
+
+
+def request_secret_key(request: web.Request) -> Optional[str]:
+    """The caller's key: the X-Secret-Key header, or on the events route the secret_key
+    query param (EventSource cannot send headers)."""
+    key = request.headers.get("X-Secret-Key")
+    if not key:
+        resource = request.match_info.route.resource
+        if resource is not None and resource.canonical == JOB_EVENTS_ROUTE:
+            key = request.query.get("secret_key")
+    return key
+
+
 def caller_key(request: Optional[web.Request] = None) -> str:
-    """The authenticating X-Secret-Key for a request, or 'anonymous' when unauthenticated."""
-    return request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+    """The authenticating key for a request, or 'anonymous' when unauthenticated."""
+    if not request:
+        return "anonymous"
+    return request_secret_key(request) or "anonymous"
 
 
 def owns_job(job: Any, request: Optional[web.Request] = None) -> bool:
@@ -321,6 +366,11 @@ def require_fields(data: Dict[str, Any], *names: str) -> None:
             )
 
 
+def _part_key_suffix(part: Optional[int]) -> str:
+    """`.2` selection-syntax suffix for a part-ful episode, empty otherwise."""
+    return f".{part}" if part is not None else ""
+
+
 def serialize_title(title: Title_T) -> Dict[str, Any]:
     """Convert a title object to JSON-serializable dict."""
     title_language = str(title.language) if hasattr(title, "language") and title.language else None
@@ -333,7 +383,10 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     cover_url = _data.get("cover_url") if isinstance(_data, dict) else None
 
     is_episode = isinstance(title, Episode)
+    episode_part = title.part if isinstance(title, Episode) else None
     if is_episode:
+        # no part suffix here: remote_service._build_title rebuilds the Episode from this dict, so a
+        # suffixed name plus the structural `part` below would render the part twice in the filename
         name = title.name if title.name else f"Episode {title.number:02d}"
     else:
         name = str(title.name) if hasattr(title, "name") else str(title)
@@ -350,12 +403,39 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     # "other" titles carry no year; only Episode/Movie do.
     if isinstance(title, (Episode, Movie)):
         result["year"] = title.year
-    if is_episode:
+    if isinstance(title, Episode):
         result["series_title"] = str(title.title)
         result["season"] = title.season
         result["number"] = title.number
+        # every key below is conditional, so JSON for a title without them is unchanged
+        if episode_part is not None:
+            result["part"] = episode_part
+        if title.air_date is not None:
+            result["air_date"] = (
+                title.air_date.isoformat() if isinstance(title.air_date, date_) else str(title.air_date)
+            )
+        if title.absolute is not None:
+            result["absolute"] = title.absolute
+        if getattr(title, "daily", None) is not None:
+            result["daily"] = title.daily
+    if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
+        result["anime"] = title.anime
 
     return result
+
+
+def _stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Dict[str, Any]:
+    """Fill anime/daily from the service class for titles that set neither.
+
+    The client rebuilds titles from this JSON against a synthetic service class, so a
+    class-level ANIME/DAILY would otherwise be lost on the way across.
+    """
+    for key, attr in (("anime", "ANIME"), ("daily", "DAILY")):
+        if key == "daily" and serialized.get("type") != "episode":
+            continue
+        if serialized.get(key) is None and getattr(type(service_instance), attr, False):
+            serialized[key] = True
+    return serialized
 
 
 def _extract_manifests(tracks) -> List[Dict[str, Any]]:
@@ -662,9 +742,9 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         titles = service_instance.get_titles()
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
-            title_list = [serialize_title(t) for t in titles]
+            title_list = [_stamp_service_flags(serialize_title(t), service_instance) for t in titles]
         else:
-            title_list = [serialize_title(titles)]
+            title_list = [_stamp_service_flags(serialize_title(titles), service_instance)]
 
         return web.json_response({"titles": title_list})
 
@@ -702,6 +782,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         wanted_param = data.get("wanted")
         season = data.get("season")
         episode = data.get("episode")
+        part = data.get("part")
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
             titles_list = list(titles)
@@ -726,7 +807,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         details={"wanted": wanted_param, "service": normalized_service},
                     )
             elif season is not None and episode is not None:
-                wanted = [f"{season}x{episode}"]
+                wanted = [f"{season}x{episode}{_part_key_suffix(part)}"]
 
             if wanted:
                 # Filter titles based on wanted episodes, similar to how dl.py does it
@@ -734,8 +815,8 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                 log.debug(f"Filtering {len(titles_list)} titles with {len(wanted)} wanted episodes")
                 for title in titles_list:
                     if isinstance(title, Episode):
-                        episode_key = f"{title.season}x{title.number}"
-                        if episode_key in wanted:
+                        episode_key = f"{title.season}x{title.number}{_part_key_suffix(title.part)}"
+                        if title.matches_wanted(wanted):
                             log.debug(f"Episode {episode_key} matches wanted list")
                             matching_titles.append(title)
                         else:
@@ -752,7 +833,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         details={
                             "service": normalized_service,
                             "title_id": title_id,
-                            "wanted": wanted_param or f"{season}x{episode}",
+                            "wanted": wanted_param or wanted[0],
                         },
                     )
 
@@ -762,7 +843,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                     failed_episodes = []
 
                     # Sort matching titles by season and episode number for consistent ordering
-                    sorted_titles = sorted(matching_titles, key=lambda t: (t.season, t.number))
+                    sorted_titles = sorted(matching_titles, key=lambda t: (t.season, t.number, t.part or 0))
 
                     for title in sorted_titles:
                         try:
@@ -783,12 +864,12 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             log.debug(f"Successfully got tracks for {title.season}x{title.number}")
                         except SystemExit:
                             # Service calls sys.exit() for unavailable episodes - catch and skip
-                            failed_episodes.append(f"S{title.season}E{title.number:02d}")
+                            failed_episodes.append(f"S{title.season}E{title.number:02d}{_part_key_suffix(title.part)}")
                             log.debug(f"Episode {title.season}x{title.number} not available, skipping")
                             continue
                         except (Exception, SystemExit) as e:
                             # Handle other errors gracefully
-                            failed_episodes.append(f"S{title.season}E{title.number:02d}")
+                            failed_episodes.append(f"S{title.season}E{title.number:02d}{_part_key_suffix(title.part)}")
                             log.debug(f"Error getting tracks for {title.season}x{title.number}: {e}")
                             continue
 
@@ -911,6 +992,30 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if not isinstance(data["downloads"], int) or data["downloads"] <= 0:
             return "downloads must be a positive integer"
 
+    for name in ("tmdb_id", "tvdb_id"):
+        if data.get(name) is not None:
+            value = data[name]
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                return f"{name} must be a positive integer"
+
+    if data.get("imdb_id") is not None:
+        if not isinstance(data["imdb_id"], str) or not re.fullmatch(r"tt\d+", data["imdb_id"]):
+            return "imdb_id must be an IMDB ID like 'tt1375666'"
+
+    if data.get("anilist_id") is not None:
+        value = data["anilist_id"]
+        # same parser as --anilist so both surfaces accept and reject the same inputs
+        valid = not isinstance(value, bool) and isinstance(value, (int, str)) and parse_anilist_ref(value)
+        if not valid:
+            return "anilist_id must be a positive integer, or a MyAnimeList ID like 'mal:21'"
+
+    supplied_ids = [name for name in ("tmdb_id", "imdb_id", "tvdb_id") if data.get(name)]
+    if len(supplied_ids) > 1:
+        return (
+            f"Cannot use multiple external IDs: {', '.join(supplied_ids)}. "
+            "Give one ID and unshackle resolves the others from it."
+        )
+
     exclusive_flags = []
     if data.get("video_only"):
         exclusive_flags.append("video_only")
@@ -944,7 +1049,7 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def enforce_download_gates(params: Dict[str, Any]) -> None:
+def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request] = None) -> None:
     """Enforce serve-config gates on per-job cdm overrides and client-supplied credentials.
 
     A per-request `cdm` selects a server-side device, so it is gated here rather than honoured
@@ -953,7 +1058,15 @@ def enforce_download_gates(params: Dict[str, Any]) -> None:
     A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
     secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
     (default off) so a default deployment stays locked to its own credentials; mirrors the CDM gate.
+    A download job licenses DRM in-process with the server's own CDM, so a key without
+    ``server_cdm`` cannot submit or retry jobs.
     """
+    if not server_cdm_allowed(request):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "Download jobs license with the server CDM, which is not enabled for this key.",
+        )
+
     requested_cdm = params.get("cdm")
     if requested_cdm:
         allowed = (config.serve or {}).get("cdm_overrides")
@@ -997,7 +1110,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"service": normalized_service, "title_id": title_id},
         )
 
-    enforce_download_gates(data)
+    enforce_download_gates(data, request)
 
     try:
         # Load service module to extract service-specific parameter defaults
@@ -1147,6 +1260,71 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
         )
 
 
+async def download_job_events_handler(job_id: str, request: web.Request) -> web.StreamResponse:
+    """Stream a download job's progress to the caller as Server-Sent Events."""
+    import json
+
+    from envied.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
+
+    manager = get_download_manager()
+    job = manager.get_job(job_id)
+
+    if not job or not owns_job(job, request):
+        raise APIError(
+            APIErrorCode.JOB_NOT_FOUND,
+            "Job not found",
+            details={"job_id": job_id},
+        )
+
+    response = web.StreamResponse(
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            # Stops nginx from buffering the stream.
+            "X-Accel-Buffering": "no",
+            **CORS_HEADERS,
+        }
+    )
+    await response.prepare(request)
+
+    async def send(event: str, data: Dict[str, Any]) -> None:
+        payload = json.dumps(data, separators=(",", ":"), default=str)
+        await response.write(f"event: {event}\ndata: {payload}\n\n".encode())
+
+    queue: Optional[asyncio.Queue] = None
+    get_task: Optional[asyncio.Task] = None
+    try:
+        await send("snapshot", job.to_dict(include_full_details=True))
+
+        if job.status not in TERMINAL_STATUSES:
+            queue = manager.subscribe(job_id)
+        if queue is None or job.status in TERMINAL_STATUSES:
+            await send(job.status.value, job.to_dict(include_full_details=True))
+            return response
+
+        while True:
+            if get_task is None:
+                get_task = asyncio.create_task(queue.get())
+            done, _ = await asyncio.wait({get_task}, timeout=15)
+            if not done:
+                await response.write(b": keep-alive\n\n")
+                continue
+            item = get_task.result()
+            get_task = None
+            if item is None:
+                break
+            await send(item["event"], item["data"])
+    except (ConnectionResetError, asyncio.CancelledError):
+        log.debug(f"SSE client disconnected from job {sanitize_log(job_id)}")
+    finally:
+        if get_task is not None:
+            get_task.cancel()
+        if queue is not None:
+            manager.unsubscribe(job_id, queue)
+
+    return response
+
+
 async def cancel_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Handle cancel/remove download job request."""
     from envied.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
@@ -1241,7 +1419,7 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
                 f"Invalid or unavailable service: {job.service}",
                 details={"service": job.service},
             )
-        enforce_download_gates(job.parameters)
+        enforce_download_gates(job.parameters, request)
 
         await manager.start_workers()
 
@@ -1583,6 +1761,7 @@ SESSION_TRANSPORT_KEYS = {
     "title_id",
     "season",
     "episode",
+    "part",
     "wanted",
     "proxy",
     "no_proxy",
@@ -1835,7 +2014,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
         for t in titles_list:
             tid = str(t.id) if hasattr(t, "id") else str(id(t))
             session.title_map[tid] = t
-            serialized_titles.append(serialize_title(t))
+            serialized_titles.append(_stamp_service_flags(serialize_title(t), service_instance))
 
         return web.json_response(
             {
@@ -1966,6 +2145,7 @@ async def session_tracks_handler(
                 "manifests": manifests,
                 "session_headers": session_headers,
                 "session_cookies": session_cookies,
+                "server_cdm": server_cdm_allowed(request),
                 "server_cdm_type": server_cdm_type,
             }
         )
@@ -2585,6 +2765,12 @@ async def session_license_handler(
     challenge_b64 = data.get("challenge")
     drm_type = data.get("drm_type", "widevine")
     mode = data.get("mode", "proxy")
+
+    if mode == "server_cdm" and not server_cdm_allowed(request):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "Server CDM licensing is not enabled for this key. Use a local CDM (proxy mode).",
+        )
 
     if mode == "server_cdm" and track_ids:
         from envied.core.config import config as app_config

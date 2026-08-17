@@ -111,8 +111,6 @@ directories:
     - https://git.gay/vinefeeder/twinvine-services.git
     #- ./packages/envied/src/envied/extraSevices/python313/  #uncomment to include extra YT. Addition may break some installations not python3.13 or 14, if so revert.
     #- ./packages/envied/src/envied/extraSevices/python311/  #uncomment to include extra DSNP. Addition may break some installations not python3.11 or 12, if so revert.
-
-    # - ./packages/envied/src/envied/extraSevices  # uncomment to include  extra DSNP & YT services. Addition may break some installations, if so revert.
     # - ./packages/envied/src/envied/services ## local user services provided by you.
 
 

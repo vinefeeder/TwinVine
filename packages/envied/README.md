@@ -9,7 +9,7 @@
 
 Envied is a fork of [Devine](https://github.com/devine-dl/devine/). The name 'envied' is an anagram of Devine, and as such, pays homage to the original author. 
 
-Envied is based on version 5.3.0 (dev branch) of unshackle.
+Envied is based on version 5.3.0 (dev branch) of envied.
 
 It is a powerful archival tool for downloading movies, TV shows, and music from streaming services. Built with a focus on modularity and extensibility, it provides a robust framework for content acquisition with support for DRM-protected content.
 
@@ -46,7 +46,7 @@ uv run envied dl SERVICE_NAME CONTENT_ID
 
 For comprehensive setup guides, configuration options, and advanced usage:
 
-📖 **[Visit unshackle online documentation](https://docs.unshackle.dev/)**
+📖 **[Visit unshackle online documentation](https://docs.envied.dev/)**
 
 The WIKI contains detailed information on:
 
@@ -54,7 +54,7 @@ The WIKI contains detailed information on:
 - DRM configuration
 - Advanced features and troubleshooting
 
-For guidance on creating services, see their [documentation](https://docs.unshackle.dev/).
+For guidance on creating services, see their [documentation](https://docs.envied.dev/).
 
 
 ## Licensing

@@ -99,7 +99,7 @@ class DecryptLabsRemoteCDM:
     def __init__(
         self,
         secret: str,
-        host: str = "https://buggeroff.com",
+        host: str = "https://keyxtractor.decryptlabs.com",
         device_name: str = "ChromeCDM",
         service_name: Optional[str] = None,
         vaults: Optional[Vaults] = None,
@@ -128,7 +128,7 @@ class DecryptLabsRemoteCDM:
         self.device_name = device_name
         self.service_name = service_name or ""
         self.vaults = vaults
-        self.uch = self.host != "https://buggeroff.com"
+        self.uch = self.host != "https://keyxtractor.decryptlabs.com"
 
         self._device_type_str = device_type
         if device_type:

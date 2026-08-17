@@ -10,7 +10,7 @@ from rich.padding import Padding
 from rich.text import Text
 from urllib3.exceptions import InsecureRequestWarning
 
-from envied.core import __version__
+from envied.core import __code_hash__, __version__
 from envied.core.commands import Commands
 from envied.core.config import config
 from envied.core.console import ComfyRichHandler, console
@@ -23,7 +23,7 @@ from envied.core.utilities import close_debug_logger, init_debug_logger
 @click.option("-v", "--version", is_flag=True, default=False, help="Print version information.")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Enable DEBUG level logs and JSON debug logging.")
 def main(version: bool, debug: bool) -> None:
-    """envied—Modular Movie, TV, and Music Archival Software."""
+    """unshackle—Modular Movie, TV, and Music Archival Software."""
     debug_logging_enabled = debug or config.debug
 
     logging.basicConfig(

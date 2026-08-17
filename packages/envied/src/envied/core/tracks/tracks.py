@@ -7,7 +7,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Iterator, Optional, Sequence, Union
 
-from langcodes import Language, closest_supported_match
+from langcodes import Language
 from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.tree import Tree
@@ -15,7 +15,7 @@ from rich.tree import Tree
 from envied.core import binaries
 from envied.core.config import config
 from envied.core.console import GradientPulseBarColumn, console
-from envied.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE, AnyTrack, TrackT
+from envied.core.constants import AnyTrack, TrackT
 from envied.core.events import events
 from envied.core.tracks.attachment import Attachment
 from envied.core.tracks.audio import Audio
@@ -23,7 +23,7 @@ from envied.core.tracks.chapters import Chapter, Chapters
 from envied.core.tracks.subtitle import Subtitle
 from envied.core.tracks.track import Track
 from envied.core.tracks.video import Video
-from envied.core.utilities import is_close_match, log_event, sanitize_filename
+from envied.core.utilities import is_close_match, log_event, matching_languages, sanitize_filename
 from envied.core.utils.collections import as_list, flatten
 
 
@@ -243,7 +243,9 @@ class Tracks:
         if duplicates:
             log.debug(f" - Found and skipped {duplicates} duplicate tracks...")
 
-    def sort_videos(self, by_language: Optional[Sequence[Union[str, Language]]] = None) -> None:
+    def sort_videos(
+        self, by_language: Optional[Sequence[Union[str, Language]]] = None, exact_match: bool = False
+    ) -> None:
         """Sort video tracks by resolution then bitrate, and optionally language."""
         if not self.videos:
             return
@@ -255,13 +257,15 @@ class Tracks:
                 language = next((x.language for x in self.videos if x.is_original_lang), "")
             if not language:
                 continue
+            wanted = matching_languages(language, [x.language for x in self.videos], exact_match)
             self.videos.sort(key=lambda x: str(x.language))
-            self.videos.sort(key=lambda x: not is_close_match(language, [x.language]))
+            self.videos.sort(key=lambda x: str(x.language) not in wanted)
 
     def sort_audio(
         self,
         by_language: Optional[Sequence[Union[str, Language]]] = None,
         codec_priority: Optional[Sequence[str]] = None,
+        exact_match: bool = False,
     ) -> None:
         """Sort audio tracks by bitrate, codec priority, Atmos, descriptive, and optionally language."""
         if not self.audio:
@@ -283,12 +287,15 @@ class Tracks:
                 language = next((x.language for x in self.audio if x.is_original_lang), "")
             if not language:
                 continue
-            self.audio.sort(key=lambda x: not is_close_match(language, [x.language]))
+            wanted = matching_languages(language, [x.language for x in self.audio], exact_match)
+            self.audio.sort(key=lambda x: str(x.language) not in wanted)
 
     def sort_subtitles(
         self,
         by_language: Optional[Sequence[Union[str, Language]]] = None,
         type_priority: Optional[Sequence[str]] = None,
+        group_by: Optional[str] = None,
+        exact_match: bool = False,
     ) -> None:
         """
         Sort subtitle tracks by various track attributes to a common P2P standard.
@@ -299,37 +306,57 @@ class Tracks:
           - then rest ascending alphabetically after the prioritized groups
           (Each section ascending alphabetically, but separated)
 
-        Language Group Order:
+        Type Order:
           - Forced
           - Normal
           - Hard of Hearing (SDH/CC)
           (Least to most captions expected in the subtitle)
 
-        type_priority overrides the Language Group Order with an explicit ranking of
-        "forced", "normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.
-        The first track after sorting receives the default flag at mux time, so this also
-        controls which subtitle type becomes default.
+        type_priority overrides the Type Order with an explicit ranking of "forced",
+        "normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.
+
+        group_by sets the major key. "type" (default) keeps every forced track together,
+        then every normal, then every SDH, each block ascending by language. "language"
+        groups by language instead, so Finnish sits next to Finnish SDH, with the Type
+        Order applied inside each language.
+
+        exact_match makes a by_language entry sort only its own tag. By default "en" also
+        sorts "en-US" and "en-GB".
         """
         if not self.subtitles:
             return
-        # language groups
-        self.subtitles.sort(key=lambda x: str(x.language))
-        if type_priority:
-            rank = {str(t).lower(): i for i, t in enumerate(type_priority)}
-            default_rank = len(rank)
-            self.subtitles.sort(
-                key=lambda x: rank.get("forced" if x.forced else "sdh" if (x.sdh or x.cc) else "normal", default_rank)
-            )
+
+        def by_type() -> None:
+            if type_priority:
+                rank = {str(t).lower(): i for i, t in enumerate(type_priority)}
+                default_rank = len(rank)
+                self.subtitles.sort(
+                    key=lambda x: rank.get(
+                        "forced" if x.forced else "sdh" if (x.sdh or x.cc) else "normal", default_rank
+                    )
+                )
+            else:
+                self.subtitles.sort(key=lambda x: x.sdh or x.cc)
+                self.subtitles.sort(key=lambda x: x.forced, reverse=True)
+
+        def by_lang() -> None:
+            self.subtitles.sort(key=lambda x: str(x.language))
+
+        # stable sorts, so the last pass is the major key
+        if str(group_by or "type").lower() == "language":
+            by_type()
+            by_lang()
         else:
-            self.subtitles.sort(key=lambda x: x.sdh or x.cc)
-            self.subtitles.sort(key=lambda x: x.forced, reverse=True)
+            by_lang()
+            by_type()
         # sections
         for language in reversed(by_language or []):
-            if str(language) == "all":
+            if str(language) in ("all", "best"):
                 language = next((x.language for x in self.subtitles if x.is_original_lang), "")
             if not language:
                 continue
-            self.subtitles.sort(key=lambda x: is_close_match(language, [x.language]), reverse=True)
+            wanted = matching_languages(language, [x.language for x in self.subtitles], exact_match)
+            self.subtitles.sort(key=lambda x: str(x.language) in wanted, reverse=True)
 
     def select_video(self, x: Callable[[Video], bool]) -> None:
         self.videos = list(filter(x, self.videos))
@@ -442,21 +469,11 @@ class Tracks:
     def by_language(
         tracks: list[TrackT], languages: list[str], per_language: int = 0, exact_match: bool = False
     ) -> list[TrackT]:
-        distance = LANGUAGE_EXACT_DISTANCE if exact_match else LANGUAGE_MAX_DISTANCE
         selected: list[TrackT] = []
         seen_ids: set[str] = set()
         for language in languages:
-            matches = [x for x in tracks if closest_supported_match(str(x.language), [language], distance)]
-            if exact_match and len(matches) > 1:
-                # CLDR tag_distance measures intelligibility, not tag identity: it rates a base
-                # language and its "paradigm" regional variant as the same language (distance 0
-                # for ar/ar-EG, en/en-US, pt/pt-BR), so exact mode alone cannot separate them.
-                # Follow RFC 4647 Lookup: prefer the most specific (string-equal) tag, and fall
-                # back to the fuzzy match only when none exists (e.g. zh matches cmn).
-                want = Language.get(language).to_tag().casefold()
-                exact_hits = [x for x in matches if Language.get(str(x.language)).to_tag().casefold() == want]
-                if exact_hits:
-                    matches = exact_hits
+            wanted = matching_languages(language, [x.language for x in tracks], exact_match)
+            matches = [x for x in tracks if str(x.language) in wanted]
             # Overlapping tags can still resolve to the same physical track; dedupe by id so
             # callers never get duplicate tracks.
             for track in matches[: per_language or None]:
@@ -506,6 +523,8 @@ class Tracks:
                 lang_name = video_track.language.display_name()
 
                 for video in self.videos:
+                    if video.data.get("audio_language"):
+                        continue
                     video.needs_repack = True
                     video.data["audio_language"] = lang_code
                     video.data["audio_language_name"] = lang_name

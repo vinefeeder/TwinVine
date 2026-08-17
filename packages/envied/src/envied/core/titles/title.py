@@ -47,6 +47,8 @@ class Title:
         self.service = service
         self.language = language
         self.data = data
+        self.anime: Optional[bool] = None
+        self.daily: Optional[bool] = None
 
         self.tracks = Tracks()
 
@@ -95,6 +97,9 @@ class Title:
             "hfr": "",
             "edition": "",
             "lang_tag": "",
+            "title_type": {"Movie": "movie", "Episode": "series", "Song": "music"}.get(
+                type(self).__name__, type(self).__name__.lower()
+            ),
         }
 
         if self.tracks:
@@ -198,6 +203,13 @@ class Title:
             audio_langs = [a.language for a in self.tracks.audio]
             sub_langs = [s.language for s in self.tracks.subtitles]
             context["lang_tag"] = evaluate_language_tag(lang_tag_rules, audio_langs, sub_langs)
+
+        if config.tag_rules:
+            from envied.core.utils.tag_rules import evaluate_tag_rules
+
+            override = evaluate_tag_rules(config.tag_rules, context)
+            if override:
+                context["tag"] = override
 
         return context
 

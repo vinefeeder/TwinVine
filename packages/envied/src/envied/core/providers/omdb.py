@@ -4,6 +4,7 @@ from difflib import SequenceMatcher
 from typing import Optional, Union
 
 import requests
+from langcodes import Language
 
 from envied.core.config import config
 from envied.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, fuzzy_match
@@ -13,6 +14,17 @@ KIND_TO_TYPE: dict[str, str] = {
     "movie": "movie",
     "tv": "series",
 }
+
+
+def primary_language(data: dict) -> Optional[str]:
+    """OMDb gives English language names, most prominent first, e.g. 'Korean, English'."""
+    name = (data.get("Language") or "").split(",")[0].strip()
+    if not name:
+        return None
+    try:
+        return str(Language.find(name))
+    except LookupError:
+        return None
 
 
 def _parse_year(value: Optional[str]) -> Optional[int]:
@@ -27,6 +39,7 @@ class OMDBProvider(MetadataProvider):
 
     NAME = "omdb"
     REQUIRES_KEY = True
+    ID_KIND = "imdb"
     BASE_URL = "https://www.omdbapi.com/"
 
     def is_available(self) -> bool:
@@ -103,6 +116,7 @@ class OMDBProvider(MetadataProvider):
             year=_parse_year(best_match.get("Year")),
             kind=kind,
             external_ids=ExternalIds(imdb_id=imdb_id),
+            original_language=primary_language(detail or best_match),
             source="omdb",
             raw=detail or best_match,
         )
@@ -121,6 +135,7 @@ class OMDBProvider(MetadataProvider):
             year=_parse_year(data.get("Year")),
             kind=kind,
             external_ids=ExternalIds(imdb_id=data.get("imdbID")),
+            original_language=primary_language(data),
             source="omdb",
             raw=data,
         )
