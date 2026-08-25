@@ -896,7 +896,7 @@ class dl:
             raise click.ClickException(
                 "No 'output_template' configured in your envied.yaml.\n"
                 "Please add an 'output_template' section with movies, series, and songs/music templates.\n"
-                "See unshackle-example.yaml for examples."
+                "See envied-example.yaml for examples."
             )
 
         self.service = Services.get_tag(ctx.invoked_subcommand)

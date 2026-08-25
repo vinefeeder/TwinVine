@@ -147,7 +147,7 @@ class Config:
             raise SystemExit(
                 "ERROR: The 'scene_naming' option has been removed.\n"
                 "Please configure 'output_template' in your envied.yaml instead.\n"
-                "See unshackle-example.yaml for examples."
+                "See envied-example.yaml for examples."
             )
 
         if self.output_template:
