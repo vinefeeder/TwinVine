@@ -56,7 +56,7 @@ dependencies = [
     "chardet>=5.2.0,<6",
     "pyplayready>=0.8.3,<0.9",
     "cryptography>=45.0.0,<47",
-    "subby @ git+https://github.com/vevv/subby.git@a057280f31acd3a0ba5c6dc69eaefbb88aea974e",
+    "subby @ git+https://github.com/vevv/subby.git@",
     "aiohttp>=3.14.0,<4",
     "aiohttp-swagger3>=0.9.0,<1",
     "pysubs2>=1.7.0,<2",
