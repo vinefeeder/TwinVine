@@ -34,13 +34,14 @@ class InputBridge:
     """Thread-safe bridge between a sync auth thread and the async HTTP layer.
 
     The auth thread calls :meth:`request_input` which blocks until the
-    remote client submits a response via the HTTP prompt endpoints.
+    remote client submits a response through the HTTP prompt endpoints.
     """
 
     _prompt: Optional[str] = field(default=None, init=False, repr=False)
     _response: Optional[str] = field(default=None, init=False, repr=False)
     _status: AuthStatus = field(default=AuthStatus.AUTHENTICATING, init=False)
     _cancelled: bool = field(default=False, init=False, repr=False)
+    _answered: bool = field(default=False, init=False, repr=False)
     _response_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
@@ -55,8 +56,8 @@ class InputBridge:
             The string response from the remote client.
 
         Raises:
-            TimeoutError: If no response is received within *timeout*.
-            RuntimeError: If the bridge was cancelled.
+            TimeoutError: If the bridge gets no response within *timeout*.
+            RuntimeError: If the server cancelled the bridge.
         """
         with self._lock:
             if self._cancelled:
@@ -83,7 +84,7 @@ class InputBridge:
             return response
 
     def get_pending_prompt(self) -> Optional[str]:
-        """Return the current prompt if the auth thread is waiting for input."""
+        """Return the current prompt when the auth thread waits for input."""
         with self._lock:
             if self._status == AuthStatus.PENDING_INPUT:
                 return self._prompt
@@ -93,13 +94,14 @@ class InputBridge:
         """Deliver the client's response and unblock the auth thread.
 
         Returns:
-            ``True`` if a prompt was pending and the response was accepted,
+            ``True`` if a prompt was pending and the bridge accepted the response,
             ``False`` otherwise.
         """
         with self._lock:
             if self._status != AuthStatus.PENDING_INPUT:
                 return False
             self._response = response
+            self._answered = True
         self._response_ready.set()
         return True
 
@@ -109,6 +111,12 @@ class InputBridge:
             self._cancelled = True
             self._status = AuthStatus.FAILED
         self._response_ready.set()
+
+    @property
+    def answered(self) -> bool:
+        """``True`` once the bridge has accepted a response from the client."""
+        with self._lock:
+            return self._answered
 
     @property
     def status(self) -> AuthStatus:

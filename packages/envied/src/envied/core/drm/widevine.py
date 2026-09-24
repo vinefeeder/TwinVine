@@ -70,14 +70,14 @@ class Widevine:
         """
         Get PSSH and KID from within the Initiation Segment of the Track Data.
         It also tries to get PSSH and KID from other track data like M3U8 data
-        as well as through ffprobe.
+        as well as through FFprobe.
 
-        Create a Widevine DRM System object from a track's information.
-        This should only be used if a PSSH could not be provided directly.
+        Make a Widevine DRM System object from a track's information.
+        Use this method only when a PSSH cannot be given directly.
         It is *rare* to need to use this.
 
-        You may provide your own requests session to be able to use custom
-        headers and more.
+        You can give your own `requests.Session` to use custom headers
+        and more.
 
         Raises:
             PSSHNotFound: If the PSSH was not found within the data.
@@ -127,7 +127,7 @@ class Widevine:
         """
         Get PSSH and KID from within Initialization Segment Data.
 
-        This should only be used if a PSSH could not be provided directly.
+        Use this method only when a PSSH cannot be given directly.
         It is *rare* to need to use this.
 
         Raises:
@@ -184,7 +184,8 @@ class Widevine:
     def to_dict(self) -> dict[str, Any]:
         """Serialise this DRM instance for export/import (PSSH + KIDs).
 
-        Content keys are stored once at the export's track level, not duplicated here.
+        unshackle stores the content keys once at the export's track level, and does not
+        duplicate them here.
         """
         return {
             "system": "Widevine",
@@ -194,9 +195,9 @@ class Widevine:
 
     def get_content_keys(self, cdm: WidevineCdm, certificate: Callable, licence: Callable) -> None:
         """
-        Create a CDM Session and obtain Content Keys for this DRM Instance.
-        The certificate and license params are expected to be a function and will
-        be provided with the challenge and session ID.
+        Make a CDM Session and get Content Keys for this DRM Instance.
+        The certificate and license params are functions. unshackle gives them
+        the challenge and the session ID.
         """
         for kid in self.kids:
             if kid in self.content_keys:
@@ -210,12 +211,19 @@ class Widevine:
                     cdm.set_service_certificate(session_id, cert)
 
                 if hasattr(cdm, "set_required_kids"):
-                    cdm.set_required_kids(self.kids)
+                    try:
+                        cdm.set_required_kids(self.kids, session_id=session_id)
+                    except TypeError:  # CDM predating the per-session signature
+                        cdm.set_required_kids(self.kids)
 
                 challenge = cdm.get_license_challenge(session_id, self.pssh)
 
                 if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
                     pass
+                elif not challenge:
+                    raise Widevine.Exceptions.EmptyLicense(
+                        "The CDM returned an empty licence challenge and has no cached keys"
+                    )
                 else:
                     log_event(
                         "drm_license_request",
@@ -227,7 +235,7 @@ class Widevine:
                         kid_count=len(self.kids),
                     )
                     try:
-                        license_res = licence(challenge=challenge, pssh=self.pssh)
+                        license_res = licence(challenge=challenge, pssh=self.pssh, session_id=session_id)
                     except TypeError:
                         license_res = licence(challenge=challenge)
                     cdm.parse_license(session_id, license_res)
@@ -261,45 +269,6 @@ class Widevine:
             finally:
                 cdm.close(session_id)
 
-    def get_NF_content_keys(self, cdm: WidevineCdm, certificate: Callable, licence: Callable) -> None:
-        """
-        Create a CDM Session and obtain Content Keys for this DRM Instance.
-        The certificate and license params are expected to be a function and will
-        be provided with the challenge and session ID.
-        """
-        for kid in self.kids:
-            if kid in self.content_keys:
-                continue
-
-            session_id = cdm.open()
-
-            try:
-                cert = certificate(challenge=cdm.service_certificate_challenge)
-                if cert and hasattr(cdm, "set_service_certificate"):
-                    cdm.set_service_certificate(session_id, cert)
-
-                if hasattr(cdm, "set_required_kids"):
-                    cdm.set_required_kids(self.kids)
-
-                challenge = cdm.get_license_challenge(session_id, self.pssh)
-
-                if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
-                    pass
-                else:
-                    cdm.parse_license(
-                        session_id,
-                        licence(session_id=session_id, challenge=challenge),
-                    )
-
-                self.content_keys = {key.kid: key.key.hex() for key in cdm.get_keys(session_id, "CONTENT")}
-                if not self.content_keys:
-                    raise Widevine.Exceptions.EmptyLicense("No Content Keys were within the License")
-
-                if kid not in self.content_keys:
-                    raise Widevine.Exceptions.CEKNotFound(f"No Content Key for KID {kid.hex} within the License")
-            finally:
-                cdm.close(session_id)
-
     def decrypt(self, path: Path) -> None:
         """
         Decrypt a Track with Widevine DRM.
@@ -307,7 +276,7 @@ class Widevine:
             path: Path to the encrypted file to decrypt
         Raises:
             EnvironmentError if the required decryption executable could not be found.
-            ValueError if the track has not yet been downloaded.
+            ValueError if unshackle has not yet downloaded the track.
             SubprocessError if the decryption process returned a non-zero exit code.
         """
         if not self.content_keys:
@@ -331,9 +300,9 @@ class Widevine:
 
         decrypt_start = time.monotonic()
         if decrypter == "mp4decrypt":
-            self._decrypt_with_mp4decrypt(path)
+            self.decrypt_with_mp4decrypt(path)
         else:
-            self._decrypt_with_shaka_packager(path)
+            self.decrypt_with_shaka_packager(path)
 
         log_event(
             "drm_decrypt_complete",
@@ -346,14 +315,8 @@ class Widevine:
             output_size=path.stat().st_size if path.exists() else 0,
         )
 
-    def _decrypt_with_mp4decrypt(self, path: Path) -> None:
-        """Decrypt using mp4decrypt"""
-        if not binaries.Mp4decrypt:
-            raise EnvironmentError("mp4decrypt executable not found but is required.")
-
-        output_path = path.with_stem(f"{path.stem}_decrypted")
-
-        # Build key arguments
+    def mp4decrypt_key_args(self) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key."""
         key_args = []
         for kid, key in self.content_keys.items():
             kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
@@ -368,6 +331,16 @@ class Widevine:
             for key in self.content_keys.values():
                 key_hex = key if isinstance(key, str) else key.hex()
                 key_args.extend(["--key", f"{zero_kid}:{key_hex}"])
+        return key_args
+
+    def decrypt_with_mp4decrypt(self, path: Path) -> None:
+        """Decrypt using mp4decrypt"""
+        if not binaries.Mp4decrypt:
+            raise EnvironmentError("mp4decrypt executable not found but is required.")
+
+        output_path = path.with_stem(f"{path.stem}_decrypted")
+
+        key_args = self.mp4decrypt_key_args()
 
         cmd = [
             str(binaries.Mp4decrypt),
@@ -399,8 +372,8 @@ class Widevine:
         path.unlink()
         shutil.move(output_path, path)
 
-    def _decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt using Shaka Packager (original method)"""
+    def decrypt_with_shaka_packager(self, path: Path) -> None:
+        """Decrypt with shaka-packager (original method)"""
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")
 
@@ -456,7 +429,6 @@ class Widevine:
                 if ":ERROR:" in line:
                     had_error = True
                 if "Insufficient bits in bitstream for given AVC profile" in line:
-                    # this is a warning and is something we don't have to worry about
                     continue
                 shaka_log_buffer += f"{line.strip()}\n"
 

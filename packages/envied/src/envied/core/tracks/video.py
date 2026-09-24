@@ -103,20 +103,20 @@ class Video(Track):
             """
             Convert CICP (Coding-Independent Code Points) values to Video Range.
 
-            CICP is defined in ITU-T H.273 and ISO/IEC 23091-2 for signaling video
-            color properties independently of the compression codec. These values are
+            ITU-T H.273 and ISO/IEC 23091-2 define CICP for signalling video
+            colour properties independently of the compression codec. These values are
             used across AVC (H.264), HEVC (H.265), VVC, AV1, and other modern codecs.
 
             The enum values (Primaries, Transfer, Matrix) match the official specifications:
             - ITU-T H.273: Coding-independent code points for video signal type identification
-            - ISO/IEC 23091-2: Information technology — Coding-independent code points — Part 2: Video
+            - ISO/IEC 23091-2: Information technology - Coding-independent code points - Part 2: Video
             - H.264 Table E-3 (Colour Primaries) and Table E-4 (Transfer Characteristics)
             - H.265 Table E.3 and E.4 (identical to H.264)
 
             Note: Value 0 = "Reserved" and Value 2 = "Unspecified" per specification.
             While both effectively mean "unknown" in practice, the distinction matters for
-            spec compliance. Value 2 was added based on user feedback (GitHub issue) and
-            verified against FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.
+            spec compliance. Value 2 was added after user feedback (GitHub issue) and matches
+            FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.
 
             Sources:
             - https://www.itu.int/rec/T-REC-H.273
@@ -178,15 +178,15 @@ class Video(Track):
                 # The codebase is currently agnostic to either, so a manual conversion to 6 is done.
                 transfer = 6
 
-            def _safe(enum_cls, value):
+            def safe(enum_cls, value):
                 try:
                     return enum_cls(value)
                 except ValueError:
                     return enum_cls(2)  # Unspecified for unknown/private-use codes
 
-            primaries = _safe(Primaries, primaries)
-            transfer = _safe(Transfer, transfer)
-            matrix = _safe(Matrix, matrix)
+            primaries = safe(Primaries, primaries)
+            transfer = safe(Transfer, transfer)
+            matrix = safe(Matrix, matrix)
 
             # primaries and matrix does not strictly correlate to a range
 
@@ -234,25 +234,24 @@ class Video(Track):
         **kwargs: Any,
     ) -> None:
         """
-        Create a new Video track object.
+        Make a new Video track object.
 
         Parameters:
             codec: A Video.Codec enum representing the video codec.
-                If not specified, MediaInfo will be used to retrieve the codec
-                once the track has been downloaded.
-            range_: A Video.Range enum representing the video color range.
+                If not specified, unshackle uses MediaInfo to get the codec
+                after it downloads the track.
+            range_: A Video.Range enum representing the video colour range.
                 Defaults to SDR if not specified.
             bitrate: A number or float representing the average bandwidth in bytes/s.
-                Float values are rounded up to the nearest integer.
+                unshackle rounds float values up to the nearest integer.
             width: The horizontal resolution of the video.
             height: The vertical resolution of the video.
             fps: A number, float, or string representing the frames/s of the video.
                 Strings may represent numbers, floats, or a fraction (num/den).
                 All strings will be cast to either a number or float.
 
-        Note: If codec, bitrate, width, height, or fps is not specified some checks
-        may be skipped or assume a value. Specifying as much information as possible
-        is highly recommended.
+        Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
+        skip some checks or assume a value. Give as much information as possible.
         """
         super().__init__(*args, **kwargs)
 
@@ -362,7 +361,7 @@ class Video(Track):
         )
 
     def change_color_range(self, range_: int) -> None:
-        """Change the Video's Color Range to Limited (0) or Full (1)."""
+        """Change the Video's Colour Range to Limited (0) or Full (1)."""
         if not self.path or not self.path.exists():
             raise ValueError("Cannot change the color range flag on a Video that has not been downloaded.")
         if not self.codec:
@@ -414,9 +413,9 @@ class Video(Track):
     def vui_bsf(self) -> Optional[str]:
         """Return the ``-bsf:v`` value that rewrites SPS VUI colour metadata to match ``self.range``.
 
-        Returns None when no rewrite is needed: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
+        Returns None when a rewrite is not necessary: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
         missing file, or when the bitstream already ships the correct colour metadata. Otherwise
-        returns a ``{h264,hevc}_metadata=...`` string suitable for ffmpeg ``-bsf:v``.
+        returns a ``{h264,hevc}_metadata=...`` string suitable for FFmpeg ``-bsf:v``.
         """
         if not self.path or not self.path.exists():
             return None
@@ -433,7 +432,7 @@ class Video(Track):
         if not vui:
             return None
 
-        # Skip the rewrite when the bitstream VUI already matches the target — avoids a full
+        # Skip the rewrite when the bitstream VUI already matches the target, which avoids a full
         # bitstream pass on services that already ship correct colour metadata
         expected = {
             Video.Range.HDR10: ("bt2020", "smpte2084", "bt2020nc"),
@@ -477,8 +476,8 @@ class Video(Track):
 
         Some services ship HDR10/HLG bitstreams with stale BT.709 VUI, which makes
         downstream tools mis-classify the file. The manifest-derived range is the
-        source of truth. Skips SDR, DV, and HYBRID. Returns True if the bitstream
-        was rewritten.
+        source of truth. Skips SDR, DV, and HYBRID. Returns True if unshackle rewrote
+        the bitstream.
         """
         bsf = self.vui_bsf()
         if bsf is None:
@@ -498,6 +497,8 @@ class Video(Track):
                     "-hide_banner",
                     "-loglevel",
                     "error",
+                    # ffmpeg exits 0 after dropping packets the bsf cannot parse
+                    "-xerror",
                     "-i",
                     str(original_path),
                     "-codec",
@@ -540,7 +541,7 @@ class Video(Track):
 
         out_path = Path(out_path)
 
-        def _run_ccextractor() -> bool:
+        def run_ccextractor() -> bool:
             cc_start = time.monotonic()
             try:
                 subprocess.run(
@@ -575,9 +576,9 @@ class Video(Track):
 
         # Try on the original file first (preserves container-level CC data like c608 boxes),
         # then fall back to repacked file (ccextractor can fail on some container formats).
-        if not _run_ccextractor():
+        if not run_ccextractor():
             self.repackage()
-            _run_ccextractor()
+            run_ccextractor()
 
         if out_path.exists():
             cc_track = Subtitle(
@@ -595,19 +596,19 @@ class Video(Track):
 
     def extract_c608(self) -> list[Subtitle]:
         """
-        Extract Apple-Style c608 box (CEA-608) subtitle using ccextractor.
+        Extract Apple-Style c608 box (CEA-608) subtitle using CCExtractor.
 
-        This isn't much more than a wrapper to the track.ccextractor function.
-        All this does, is actually check if a c608 box exists and only if so
-        does it actually call ccextractor.
+        This is not much more than a wrapper to the track.ccextractor function.
+        All this does is examine if a c608 box exists, and only then
+        does it call CCExtractor.
 
-        Even though there is a possibility of more than one c608 box, only one
-        can actually be extracted. Not only that but it's very possible this
+        Even though there is a possibility of more than one c608 box, unshackle
+        can extract only one. It is also very possible this
         needs to be done before any decryption as the decryption may destroy
         some of the metadata.
 
-        TODO: Need a test file with more than one c608 box to add support for
-              more than one CEA-608 extraction.
+        TODO: Need a test file with more than one c608 box, before unshackle can
+              extract more than one CEA-608 track.
         """
         if not self.path:
             raise ValueError("You must download the track first.")
@@ -638,9 +639,9 @@ class Video(Track):
         Remove EIA-CC data from Bitstream while keeping SEI data.
 
         This works by removing all NAL Unit's with the Type of 6 from the bistream
-        and then re-adding SEI data (effectively a new NAL Unit with just the SEI data).
-        Only bitstreams with x264 encoding information is currently supported due to the
-        obscurity on the MDAT mp4 box structure. Therefore, we need to use hacky regex.
+        and then re-adding SEI data (effectively a new NAL Unit with only the SEI data).
+        unshackle can do this only for bitstreams with x264 encoding information, because of
+        the obscurity on the MDAT mp4 box structure. Therefore, we need to use hacky regex.
         """
         if not self.path or not self.path.exists():
             raise ValueError("Cannot clean a Track that has not been downloaded.")

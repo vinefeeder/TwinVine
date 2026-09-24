@@ -6,11 +6,12 @@ from requests.utils import prepend_scheme_if_needed
 from urllib3.util import parse_url
 
 from envied.core.proxies.proxy import Proxy
+from envied.core.utils.redact import mask_proxy
 
 
 class Basic(Proxy):
     def __init__(self, **countries: dict[str, Union[str, list[str]]]):
-        """Basic Proxy Service using Proxies specified in the config."""
+        """Basic proxy provider that uses the proxies given in the configuration file."""
         self.countries = {k.lower(): v for k, v in countries.items()}
 
     def __repr__(self) -> str:
@@ -49,6 +50,9 @@ class Basic(Proxy):
         proxy = prepend_scheme_if_needed(proxy, "http")
         parsed_proxy = parse_url(proxy)
         if not parsed_proxy.host:
-            raise ValueError(f"The proxy '{proxy}' is not a valid proxy URI supported by Python-Requests.")
+            raise ValueError(
+                f"The proxy '{mask_proxy(proxy, mask_host=True, allow_debug=False)}' "
+                "is not a valid proxy URI supported by Python-Requests."
+            )
 
         return proxy

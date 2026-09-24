@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import subprocess
+import threading
 import time
 from functools import partial
 from pathlib import Path
@@ -21,10 +24,19 @@ from envied.core.tracks.attachment import Attachment
 from envied.core.tracks.audio import Audio
 from envied.core.tracks.chapters import Chapter, Chapters
 from envied.core.tracks.subtitle import Subtitle
-from envied.core.tracks.track import Track
+from envied.core.tracks.track import Track, has_dts_uhd_sample_entry, strip_duplicate_init_boxes
 from envied.core.tracks.video import Video
-from envied.core.utilities import is_close_match, log_event, matching_languages, sanitize_filename
+from envied.core.utilities import (
+    is_close_match,
+    log_event,
+    matching_languages,
+    sanitize_filename,
+    valid_language,
+)
 from envied.core.utils.collections import as_list, flatten
+
+MP4BOX_PROGRESS = re.compile(r"\((\d{1,3})/100\)")
+MP4BOX_OPEN_FAILED = re.compile(r"error while opening|Error opening file|Invalid IsoMedia File", re.I)
 
 
 class Tracks:
@@ -132,7 +144,7 @@ class Tracks:
                             **kwargs: Any,
                         ) -> None:
                             """
-                            Ensure terminal status states render as a fully completed bar.
+                            Make sure that terminal status states render as a fully completed bar.
 
                             Some downloaders can report completed slightly below total
                             before emitting the final "Downloaded" state.
@@ -190,8 +202,8 @@ class Tracks:
         return tree, progress_callables
 
     def exists(self, by_id: Optional[str] = None, by_url: Optional[Union[str, list[str]]] = None) -> bool:
-        """Check if a track already exists by various methods."""
-        if by_id:  # recommended
+        """Examine whether a track already exists, by various methods."""
+        if by_id:
             return any(x.id == by_id for x in self)
         if by_url:
             return any(x.url == by_url for x in self)
@@ -204,7 +216,11 @@ class Tracks:
         ],
         warn_only: bool = False,
     ) -> None:
-        """Add a provided track to its appropriate array and ensuring it's not a duplicate."""
+        """Add a provided track to its appropriate array.
+
+        A track whose ID is already in the collection raises ValueError. With `warn_only`
+        set, this method skips such a track and logs how many it skipped.
+        """
         if isinstance(tracks, Tracks):
             if tracks.manifest_url and not self.manifest_url:
                 self.manifest_url = tracks.manifest_url
@@ -251,7 +267,6 @@ class Tracks:
             return
         # resolution first, then bitrate (unknown-bitrate tracks still rank by resolution)
         self.videos.sort(key=lambda x: (x.height or 0, float(x.bitrate or 0.0)), reverse=True)
-        # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = next((x.language for x in self.videos if x.is_original_lang), "")
@@ -279,9 +294,7 @@ class Tracks:
             self.audio.sort(key=lambda x: rank.get(x.codec.name if x.codec else "", default_rank))
         # Atmos tracks first (prioritize over higher bitrate non-Atmos)
         self.audio.sort(key=lambda x: not x.atmos)
-        # descriptive tracks last
         self.audio.sort(key=lambda x: x.descriptive)
-        # language
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = next((x.language for x in self.audio if x.is_original_lang), "")
@@ -299,7 +312,7 @@ class Tracks:
     ) -> None:
         """
         Sort subtitle tracks by various track attributes to a common P2P standard.
-        You may optionally provide a sequence of languages to prioritize to the top.
+        You may optionally give a sequence of languages to prioritise to the top.
 
         Section Order:
           - by_language groups prioritized to top, and ascending alphabetically
@@ -313,9 +326,9 @@ class Tracks:
           (Least to most captions expected in the subtitle)
 
         type_priority overrides the Type Order with an explicit ranking of "forced",
-        "normal", and "sdh" (cc counts as sdh); unlisted types fall to the end.
+        "normal", and "sdh" (cc counts as sdh). Unlisted types fall to the end.
 
-        group_by sets the major key. "type" (default) keeps every forced track together,
+        group_by sets the major sort order. "type" (default) keeps every forced track together,
         then every normal, then every SDH, each block ascending by language. "language"
         groups by language instead, so Finnish sits next to Finnish SDH, with the Type
         Order applied inside each language.
@@ -349,7 +362,6 @@ class Tracks:
         else:
             by_lang()
             by_type()
-        # sections
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = next((x.language for x in self.subtitles if x.is_original_lang), "")
@@ -381,8 +393,9 @@ class Tracks:
     def merge_video_selections(*groups: list[Video]) -> list[Video]:
         """Concatenate video selections, dropping duplicates (by track id, order-preserving).
 
-        A DV track can be chosen as both the hybrid ingredient (lowest) and an explicit
-        deliverable; without dedup the same track would be muxed/downloaded twice.
+        A caller can choose a DV track as both the hybrid ingredient (lowest) and an
+        explicit deliverable. Without dedup, unshackle would mux and download the same
+        track twice.
         """
         merged: list[Video] = []
         for group in groups:
@@ -397,9 +410,10 @@ class Tracks:
     ) -> tuple[list[Video], list[Video]]:
         """Split videos into hybrid-ingredient candidates and the standalone-deliverable pool.
 
-        HDR10/HDR10+/DV tracks are hybrid ingredients; they only enter the standalone
-        pool when their range was explicitly requested alongside HYBRID, so e.g.
-        `-r HYBRID` muxes only the hybrid while `-r HYBRID,HDR10P` also delivers HDR10+.
+        HDR10/HDR10+/DV tracks are hybrid ingredients. They only enter the standalone
+        pool when the user explicitly requested their range alongside HYBRID, so for
+        example `-r HYBRID` muxes only the hybrid while `-r HYBRID,HDR10P` also delivers
+        HDR10+.
         """
         ingredient_ranges = (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV)
         hybrid_candidates = [v for v in videos if v.range in ingredient_ranges]
@@ -410,8 +424,8 @@ class Tracks:
     def flag_hybrid_ingredients(hybrid_selected: list[Video], non_hybrid_selected: list[Video]) -> None:
         """Mark tracks selected only as hybrid ingredients so the standalone mux loop skips them.
 
-        A track that was also picked as an explicit deliverable (same track in both
-        selections) stays unflagged and is muxed standalone alongside the hybrid.
+        A track that the caller also selected as an explicit deliverable (same track in both
+        selections) stays unflagged, and the standalone mux loop muxes it alongside the hybrid.
         """
         for video in hybrid_selected:
             if video not in non_hybrid_selected:
@@ -451,19 +465,18 @@ class Tracks:
         return select
 
     def by_resolutions(self, resolutions: list[int], per_resolution: int = 0) -> None:
-        # Note: Do not merge these list comprehensions. They must be done separately so the results
-        # from the 16:9 canvas check is only used if there's no exact height resolution match.
-        selected = []
+        groups: dict[tuple, list[Video]] = {}
+        for video in self.videos:
+            groups.setdefault((video.range, video.codec), []).append(video)
+
+        keep: set[int] = set()
         for resolution in resolutions:
-            matches = [  # exact matches
-                x for x in self.videos if x.height == resolution
-            ]
-            if not matches:
-                matches = [  # 16:9 canvas matches
-                    x for x in self.videos if x.width and int(x.width * (9 / 16)) == resolution
-                ]
-            selected.extend(matches[: per_resolution or None])
-        self.videos = selected
+            for group in groups.values():
+                matches = [x for x in group if x.height == resolution]
+                if not matches:
+                    matches = [x for x in group if x.width and int(x.width * (9 / 16)) == resolution]
+                keep.update(id(x) for x in matches[: per_resolution or None])
+        self.videos = [x for x in self.videos if id(x) in keep]
 
     @staticmethod
     def by_language(
@@ -482,6 +495,173 @@ class Tracks:
                     selected.append(track)
         return selected
 
+    def _mux_mp4(
+        self,
+        title: str,
+        delete: bool = True,
+        progress: Optional[partial] = None,
+        skip_subtitles: bool = False,
+        output_path: Optional[Path] = None,
+    ) -> tuple[Path, int, list[str]]:
+        """
+        Multiplex the Tracks into an MP4 Container with MP4Box.
+
+        Only used for a codec Matroska cannot name, currently DTS-UHD, because MP4 carries
+        far less: it drops the forced, hearing-impaired and original flags, holds no
+        attachments at all, and leaves out a subtitle it has no format for rather than
+        mangling it. Losing those beats shipping audio no player can name.
+
+        Returns the same (path, returncode, errors) shape as the Matroska mux.
+        """
+        mp4box = getattr(binaries, "MP4Box", None)
+        if not mp4box:
+            raise RuntimeError(
+                "MP4Box (GPAC) is required to mux DTS-UHD (DTS:X Profile 2) audio but was not found. "
+                "Install it with your package manager (e.g. `apt install gpac`), then check it with "
+                "`unshackle env check`."
+            )
+
+        progress = progress or partial(lambda **kwargs: None)
+
+        cl = [str(mp4box)]
+        names: list[str] = []
+        cleaned: list[Path] = []
+        track_id = 0
+
+        for track in [*self.videos, *self.audio, *([] if skip_subtitles else self.subtitles)]:
+            if not track.path or not track.path.exists():
+                raise ValueError(f"{track.__class__.__name__} Track must be downloaded before muxing...")
+            if isinstance(track, Subtitle) and track.path.suffix.lower() in (".ass", ".ssa"):
+                log_event(
+                    "mux_mp4_subtitle_skipped",
+                    level="WARNING",
+                    message=f"MP4 cannot store {track.path.suffix.lstrip('.').upper()} subtitles, leaving out {track.language}",
+                    context={"track_id": track.id, "language": str(track.language), "suffix": track.path.suffix},
+                )
+                continue
+            events.emit(events.Types.TRACK_MULTIPLEX, track=track)
+            track_id += 1
+
+            source = track.path
+            candidate = config.directories.temp / f"mp4mux_{track.id}_{os.getpid()}_{threading.get_ident()}.mp4"
+            dropped = strip_duplicate_init_boxes(source, candidate)
+            if dropped:
+                cleaned.append(candidate)
+                source = candidate
+                log_event(
+                    "mux_mp4_init_deduplicated",
+                    level="DEBUG",
+                    message=f"Dropped {dropped} repeated init box(es) from {track.path.name} for MP4Box",
+                    context={"track_id": track.id, "dropped": dropped},
+                )
+            elif candidate.exists():
+                candidate.unlink()
+
+            cl.extend(["-add", f"{source}:lang={track.language}"])
+            name = "" if isinstance(track, Video) else (track.get_track_name() or "")
+            if name:
+                names.extend(["-name", f"{track_id}={name}"])
+
+        if not track_id:
+            raise ValueError("No tracks provided, at least one track must be provided.")
+
+        cl.extend(names)
+
+        chapters_path = None
+        if self.chapters:
+            chapters_path = config.directories.temp / config.filenames.chapters.format(
+                title=sanitize_filename(title), random=f"{self.chapters.id}_{os.getpid()}_{threading.get_ident()}"
+            )
+            self.chapters.dump(chapters_path, fallback_name=config.chapter_fallback_name)
+            cl.extend(["-chap", str(chapters_path)])
+
+        if self.attachments:
+            log_event(
+                "mux_mp4_attachments_skipped",
+                level="WARNING",
+                message=f"MP4 cannot store attachments, leaving out {len(self.attachments)} file(s)",
+                context={"count": len(self.attachments)},
+            )
+
+        if output_path is None:
+            first = self.videos[0].path if self.videos else self.audio[0].path if self.audio else None
+            if first is None:
+                raise ValueError("No tracks provided, at least one track must be provided.")
+            output_path = first.with_suffix(".muxed.mp4")
+        else:
+            output_path = output_path.with_suffix(".mp4")
+
+        full_command = [*cl, "-new", str(output_path)]
+
+        log_event(
+            "mux_start",
+            level="INFO",
+            message=f"Muxing {len(self.videos)}V/{len(self.audio)}A/{len(self.subtitles)}S -> {output_path.name}",
+            context={
+                "title": title,
+                "output_path": str(output_path),
+                "muxer": str(mp4box),
+                "command": full_command,
+                "container": "mp4",
+                "reason": "DTS-UHD audio has no Matroska CodecID",
+            },
+        )
+
+        try:
+            errors = []
+            mux_start_time = time.monotonic()
+            p = subprocess.Popen(
+                full_command,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            assert p.stdout is not None
+            for line in iter(p.stdout.readline, ""):
+                line = line.strip()
+                if not line:
+                    continue
+                percent = MP4BOX_PROGRESS.search(line)
+                if percent:
+                    progress(total=100, completed=int(percent.group(1)))
+                elif "error" in line.lower() or "not supported" in line.lower():
+                    errors.append(line)
+
+            returncode = p.wait()
+            if returncode < 2 and any(MP4BOX_OPEN_FAILED.search(line) for line in errors):
+                returncode = 2
+            mux_duration_ms = round((time.monotonic() - mux_start_time) * 1000, 1)
+            output_size = output_path.stat().st_size if output_path.exists() else 0
+
+            log_event(
+                "mux_failed" if returncode != 0 else "mux_complete",
+                level="ERROR" if returncode != 0 else "INFO",
+                message=(
+                    f"MP4Box exited with code {returncode}"
+                    if returncode != 0
+                    else f"Muxed {output_path.name} ({output_size} bytes) in {mux_duration_ms}ms"
+                ),
+                context={
+                    "output_path": str(output_path),
+                    "output_size": output_size,
+                    "duration_ms": mux_duration_ms,
+                    "returncode": returncode,
+                    "errors": errors,
+                },
+            )
+
+            return output_path, returncode, errors
+        finally:
+            if chapters_path:
+                chapters_path.unlink()
+            for path in cleaned:
+                path.unlink(missing_ok=True)
+            if delete:
+                for track in self:
+                    track.delete()
+
     def mux(
         self,
         title: str,
@@ -495,19 +675,22 @@ class Tracks:
         """
         Multiplex all the Tracks into a Matroska Container file.
 
+        A failed mux does not raise. mkvmerge's exit code and error lines come back alongside the
+        output path, and the caller must examine them.
+
         Parameters:
             title: Set the Matroska Container file title. Usually displayed in players
                 instead of the filename if set.
             delete: Delete all track files after multiplexing.
-            progress: Update a rich progress bar via `completed=...`. This must be the
-                progress object's update() func, pre-set with task id via functools.partial.
-            audio_expected: Whether audio is expected in the output. Used to determine
-                if embedded audio metadata should be added.
+            progress: Update a rich progress bar with `completed=...`. This must be the
+                progress object's update() func, pre-set with task id by functools.partial.
+            audio_expected: Whether the output must have audio. unshackle uses this to
+                decide if it adds embedded audio metadata.
             title_language: The title's intended language. Used to select the best video track
                 for audio metadata when multiple video tracks exist.
             skip_subtitles: Skip muxing subtitle tracks into the container.
-            output_path: Explicit destination for the muxed container. When None (default) the
-                path is derived from the first track, so callers muxing several track groups that
+            output_path: Explicit destination for the muxed container. When None (default)
+                unshackle derives the path from the first track, so callers muxing several track groups that
                 share a video list must pass distinct paths to avoid clobbering each other.
         """
         if self.videos and not self.audio and audio_expected:
@@ -529,6 +712,15 @@ class Tracks:
                     video.data["audio_language"] = lang_code
                     video.data["audio_language_name"] = lang_name
 
+        if any(at.path and at.path.exists() and has_dts_uhd_sample_entry(at.path) for at in self.audio):
+            return self._mux_mp4(
+                title=title,
+                delete=delete,
+                progress=progress,
+                skip_subtitles=skip_subtitles,
+                output_path=output_path,
+            )
+
         if not binaries.MKVToolNix:
             raise RuntimeError("MKVToolNix (mkvmerge) is required for muxing but was not found")
 
@@ -541,9 +733,10 @@ class Tracks:
             cl.extend(["--title", title])
 
         default_language = config.muxing.get("default_language") or {}
-        preferred_video_lang = default_language.get("video")
-        preferred_audio_lang = default_language.get("audio")
-        preferred_subtitle_lang = default_language.get("subtitle")
+        # mux() runs after every track is downloaded, so a typo here must not discard the title
+        preferred_video_lang = valid_language(default_language.get("video"))
+        preferred_audio_lang = valid_language(default_language.get("audio"))
+        preferred_subtitle_lang = valid_language(default_language.get("subtitle"))
 
         preferred_video_idx: Optional[int] = None
         if preferred_video_lang:
@@ -580,7 +773,6 @@ class Tracks:
             else:
                 is_default = i == 0
 
-            # Prepare base arguments
             video_args = [
                 "--language",
                 f"0:{vt.language}",
@@ -589,7 +781,7 @@ class Tracks:
                 "--original-flag",
                 f"0:{vt.is_original_lang}",
                 "--compression",
-                "0:none",  # disable extra compression
+                "0:none",
             ]
 
             # Add FPS fix if needed (typically for hybrid mode to prevent sync issues)
@@ -646,7 +838,7 @@ class Tracks:
                     "--original-flag",
                     f"0:{at.is_original_lang}",
                     "--compression",
-                    "0:none",  # disable extra compression
+                    "0:none",
                     "(",
                     str(at.path),
                     ")",
@@ -679,7 +871,7 @@ class Tracks:
                         "--original-flag",
                         f"0:{st.is_original_lang}",
                         "--compression",
-                        "0:none",  # disable extra compression (probably zlib)
+                        "0:none",
                         "(",
                         str(st.path),
                         ")",
@@ -688,7 +880,7 @@ class Tracks:
 
         if self.chapters:
             chapters_path = config.directories.temp / config.filenames.chapters.format(
-                title=sanitize_filename(title), random=self.chapters.id
+                title=sanitize_filename(title), random=f"{self.chapters.id}_{os.getpid()}_{threading.get_ident()}"
             )
             self.chapters.dump(chapters_path, fallback_name=config.chapter_fallback_name)
             cl.extend(["--chapter-charset", "UTF-8", "--chapters", str(chapters_path)])
@@ -755,7 +947,6 @@ class Tracks:
             },
         )
 
-        # let potential failures go to caller, caller should handle
         try:
             errors = []
             warnings = []

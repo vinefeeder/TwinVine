@@ -1,8 +1,8 @@
 """
-Named CLI color themes.
+Named CLI colour themes.
 
 Each palette maps the same role keys to colors: `text`/`text2` for body copy, `pink` for the
-brand accent, the six ANSI hues, and the gray ramp used for rules and dim details. The active
+brand accent, the six ANSI hues, and the grey ramp used for rules and dim details. The active
 palette drives both the rich Console theme (banner, logs, progress) and the click help screens,
 so a single `theme` config value restyles the whole CLI.
 """
@@ -18,7 +18,7 @@ PALETTES: dict[str, dict[str, str]] = {
     "catppuccin-mocha": {
         "bg": "rgb(30,30,46)",
         "text": "rgb(205,214,244)",
-        "text2": "rgb(162,169,193)",  # slightly darker
+        "text2": "rgb(162,169,193)",
         "black": "rgb(69,71,90)",
         "bright_black": "rgb(88,91,112)",
         "red": "rgb(243,139,168)",
@@ -182,7 +182,8 @@ ALIASES = {
 def resolve_palette(name: object) -> dict[str, str] | None:
     """Look up a palette by theme name or alias, case-insensitively.
 
-    Takes any YAML scalar since config values are unvalidated; non-strings never match.
+    Takes any YAML scalar, because unshackle does not validate config values. A non-string
+    never matches a palette name.
     Returns a copy: console.py extends the active palette in place, and that must
     not pollute the master definitions.
     """
@@ -192,7 +193,7 @@ def resolve_palette(name: object) -> dict[str, str] | None:
 
 
 def build_help_config(palette: dict[str, str]) -> RichHelpConfiguration:
-    """Build the rich-click help styling for a palette."""
+    """Assemble the rich-click help configuration for a palette."""
     return RichHelpConfiguration(
         style_option=palette["text"],
         style_switch=palette["green"],
@@ -223,6 +224,13 @@ def build_help_config(palette: dict[str, str]) -> RichHelpConfiguration:
         style_options_table_box="HORIZONTALS",
         style_options_table_show_lines=True,
         style_options_table_border_style=palette["dark_gray"],
+        padding_helptext=(0, 1, 1, 5),
+        padding_usage=(1, 1, 1, 5),
+        style_options_panel_padding=(0, 1, 0, 3),
+        style_commands_panel_padding=(0, 1, 0, 4),
+        panel_title_padding=3,
+        padding_errors_panel=(0, 1, 1, 5),
+        padding_errors_suggestion=(0, 1, 0, 5),
     )
 
 

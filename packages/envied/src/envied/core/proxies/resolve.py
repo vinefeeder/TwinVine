@@ -5,15 +5,24 @@ Used by both the REST API handlers and the remote service client.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 from typing import Any, List, Optional
+from urllib.parse import urlparse
+
+from envied.core.utils.redact import mask_proxy
 
 log = logging.getLogger("proxies")
 
 
-def initialize_proxy_providers() -> List[Any]:
-    """Initialize and return available proxy providers from config."""
+def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) -> List[Any]:
+    """Initialise and return available proxy providers from config.
+
+    A proxy provider that fails to build is logged and skipped, unless *raise_errors* is set.
+    *quiet* drops the per-provider summary lines: rendering a proxy provider asks some of them
+    for their server catalogue over the network, which a repeated caller must not pay for.
+    """
     proxy_providers: list = []
     try:
         from envied.core import binaries
@@ -43,20 +52,23 @@ def initialize_proxy_providers() -> List[Any]:
         if hasattr(binaries, "HolaProxy") and binaries.HolaProxy:
             proxy_providers.append(Hola())
 
-        for provider in proxy_providers:
-            log.info(f"Loaded {provider.__class__.__name__}: {provider}")
+        if not quiet:
+            for provider in proxy_providers:
+                log.info(f"Loaded {provider.__class__.__name__}: {provider}")
 
-        if not proxy_providers:
-            log.warning("No proxy providers were loaded. Check your proxy provider configuration in envied.yaml")
+            if not proxy_providers:
+                log.warning("No proxy providers were loaded. Check your proxy provider configuration in envied.yaml")
 
     except Exception as e:
+        if raise_errors:
+            raise
         log.warning(f"Failed to initialize some proxy providers: {e}")
 
     return proxy_providers
 
 
 def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
-    """Resolve a proxy parameter to an actual proxy URI.
+    """Change a proxy parameter to a real proxy URI.
 
     Accepts:
       - Direct URI: "https://...", "socks5://..."
@@ -85,13 +97,31 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
         proxy_uri = provider.get_proxy(query)
         if not proxy_uri:
             raise ValueError(f"Proxy provider {requested_provider} had no proxy for {query}")
-        log.info(f"Using {provider.__class__.__name__} Proxy: {proxy_uri}")
+        log.info(
+            f"Using {provider.__class__.__name__} Proxy: "
+            f"{mask_proxy(proxy_uri, provider.__class__.__name__ == 'Basic', allow_debug=False)}"
+        )
         return proxy_uri
 
     for provider in proxy_providers:
         proxy_uri = provider.get_proxy(query)
         if proxy_uri:
-            log.info(f"Using {provider.__class__.__name__} Proxy: {proxy_uri}")
+            log.info(
+                f"Using {provider.__class__.__name__} Proxy: "
+                f"{mask_proxy(proxy_uri, provider.__class__.__name__ == 'Basic', allow_debug=False)}"
+            )
             return proxy_uri
 
     raise ValueError(f"No proxy provider had a proxy for {proxy}")
+
+
+def is_loopback(uri: str) -> bool:
+    """Whether a proxy or server URI points at this machine."""
+    parsed = urlparse(uri if "//" in uri else f"//{uri}")
+    host = parsed.hostname or ""
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False

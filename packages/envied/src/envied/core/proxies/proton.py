@@ -11,10 +11,9 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from rich.text import Text
 
 from envied.core.config import config
-from envied.core.console import console
+from envied.core.console import prompt_user
 from envied.core.proxies.proxy import Proxy
 
 log = logging.getLogger("proxies.proton")
@@ -24,12 +23,12 @@ class ProtonVPN(Proxy):
     """
     Proton VPN HTTPS proxy provider.
 
-    Authenticates via TV login (a self-sustaining session cached at <cache>/vpn/protonvpn.json, the
-    only refreshable kind) or an exported account.proton.me cookie session (AUTH-<UID>, access only —
+    Authenticates through TV login (a self-sustaining login session cached at <cache>/vpn/protonvpn.json, the
+    only refreshable kind) or an exported account.proton.me cookie session (AUTH-<UID>, access only,
     re-export on expiry). Resolves a server by country/city, mints short-lived proxy credentials, and
     returns an authenticated HTTPS proxy URL (https://user:pass@server:4443).
 
-    Query format (after the provider prefix, e.g. "protonvpn:us"):
+    Query format (after the proxy provider prefix, for example "protonvpn:us"):
         us             random server in the country (paid preferred over free)
         us12           Proton server #12 (the number shown in the connection log)
         us:ny          city, NordVPN-style
@@ -212,7 +211,7 @@ class ProtonVPN(Proxy):
         return None
 
     def api(self, method: str, path: str) -> Optional[requests.Response]:
-        """Call the Proton API, refreshing the session once on a 401."""
+        """Call the Proton API, and refresh the login session one time on a 401."""
         if not self.access_token:
             self.load_session()
         if not self.access_token:
@@ -306,7 +305,10 @@ class ProtonVPN(Proxy):
             self.tv_login()
 
     def tv_login(self) -> bool:
-        """Fork a TV session and have the user approve the code at proton.me/tv; tokens refresh like the cookie path."""
+        """Fork a TV login session and let the user approve the code at proton.me/tv.
+
+        Tokens refresh like the cookie path.
+        """
         headers = {
             "x-pm-appversion": self.TV_APP_VERSION,
             "x-pm-locale": "en",
@@ -326,13 +328,12 @@ class ProtonVPN(Proxy):
             log.error("Proton: unexpected TV login response")
             return False
 
-        indent = " " * 5
         prompt = (
             "Proton: open https://account.proton.me/vpn/tv/code\n"
             f"Enter code {user_code}, then press Enter to continue..."
         )
         try:
-            console.input(Text(indent + prompt.replace("\n", "\n" + indent), style="text"))
+            prompt_user(prompt)
         except EOFError:
             return False
 
@@ -439,7 +440,7 @@ def server_no(server: dict) -> Optional[int]:
 
 
 def write_private(path: Path, content: str) -> None:
-    """Write content to path created with owner-only (0600) permissions."""
+    """Write text to path. The new file has owner-only (0600) permissions."""
     if hasattr(os, "fchmod"):
         fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:

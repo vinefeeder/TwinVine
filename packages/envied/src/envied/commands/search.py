@@ -21,12 +21,13 @@ from envied.core.service import Service
 from envied.core.services import Services
 from envied.core.utils.click_types import ContextData
 from envied.core.utils.collections import merge_dict
+from envied.core.utils.redact import mask_proxy
 
 
 @click.command(
     short_help="Search for titles from a Service.",
     cls=Services,
-    context_settings=dict(**context_settings, token_normalize_func=Services.get_tag),
+    context_settings=context_settings,
 )
 @click.option(
     "-p", "--profile", type=str, default=None, help="Profile to use for Credentials and Cookies (if available)."
@@ -89,9 +90,7 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
         if proxy:
             requested_provider = None
             if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
-                # requesting proxy from a specific proxy provider
                 requested_provider, proxy = proxy.split(":", maxsplit=1)
-            # Match simple region codes (us, ca, uk1) or provider:region format (nordvpn:ca, windscribe:us)
             if re.match(r"^[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE) or re.match(
                 r"^[a-z]+:[a-z]{2}(?:[-][a-z0-9]+)*(?:\d+)?$", proxy, re.IGNORECASE
             ):
@@ -115,7 +114,10 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                         if display:
                             log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
                         else:
-                            log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                            log.info(
+                                f"Using {proxy_provider.__class__.__name__} Proxy: "
+                                f"{mask_proxy(proxy, isinstance(proxy_provider, Basic))}"
+                            )
                     else:
                         for proxy_provider in proxy_providers:
                             proxy_uri = proxy_provider.get_proxy(proxy)
@@ -127,10 +129,13 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                                 if display:
                                     log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
                                 else:
-                                    log.info(f"Using {proxy_provider.__class__.__name__} Proxy: {proxy}")
+                                    log.info(
+                                        f"Using {proxy_provider.__class__.__name__} Proxy: "
+                                        f"{mask_proxy(proxy, isinstance(proxy_provider, Basic))}"
+                                    )
                                 break
             else:
-                log.info(f"Using explicit Proxy: {proxy}")
+                log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
 
     ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
 
@@ -161,7 +166,6 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
             result_text += f"\n[bright_black]id: {result.id}[/]"
             search_results.add(result_text + "\n")
 
-    # update cookies
     cookie_file = dl.get_cookie_path(service_tag, profile)
     if cookie_file:
         dl.save_cookies(cookie_file, service.session.cookies)

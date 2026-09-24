@@ -25,12 +25,12 @@ TS_SYNC_CHECKS = 4
 
 
 class ClearKey:
-    """AES Clear Key DRM System."""
+    """AES-128 ClearKey (HLS) DRM system."""
 
     def __init__(self, key: Union[bytes, str], iv: Optional[Union[bytes, str]] = None):
         """
-        Generally IV should be provided where possible. If not provided, it will be
-        set to \x00 of the same bit-size of the key.
+        Give the IV where possible. If you do not give an IV, unshackle sets it to
+        \x00 of the same bit-size as the content key.
         """
         if isinstance(key, str):
             key = bytes.fromhex(key.replace("0x", ""))
@@ -50,14 +50,14 @@ class ClearKey:
         self.iv: bytes = iv
         self._warned_clear: bool = False
 
-    def _warn_clear(self, reason: str) -> None:
-        """Warn once per track that a segment was passed through undecrypted."""
+    def warn_clear(self, reason: str) -> None:
+        """Warn once per track that unshackle passed a segment through undecrypted."""
         if not self._warned_clear:
             log.warning("ClearKey: manifest signaled AES-128 encryption but %s; passing segment through.", reason)
             self._warned_clear = True
 
     def decrypt(self, path: Path) -> None:
-        """Decrypt a Track with AES Clear Key DRM."""
+        """Decrypt a Track with AES-128 ClearKey (HLS) DRM."""
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
 
@@ -71,13 +71,13 @@ class ClearKey:
             and len(data) >= TS_PACKET_SIZE * TS_SYNC_CHECKS
             and all(data[i * TS_PACKET_SIZE] == SYNC_BYTE for i in range(TS_SYNC_CHECKS))
         ):
-            self._warn_clear("the segment is clear MPEG-TS")
+            self.warn_clear("the segment is clear MPEG-TS")
             return
 
         # Valid AES-128-CBC ciphertext is always a 16-byte multiple; anything else is not
         # ciphertext (truncated/clear/SAMPLE-AES). Decrypting would raise, so pass it through.
         if len(data) % AES.block_size != 0:
-            self._warn_clear(f"the segment length ({len(data)} bytes) is not a multiple of {AES.block_size}")
+            self.warn_clear(f"the segment length ({len(data)} bytes) is not a multiple of {AES.block_size}")
             return
 
         log_event(
@@ -108,9 +108,9 @@ class ClearKey:
         Load a ClearKey from an M3U(8) Playlist's EXT-X-KEY.
 
         Parameters:
-            m3u_key: A Key object parsed from a m3u(8) playlist using
+            m3u_key: A `Key` object parsed from a m3u(8) playlist using
                 the `m3u8` library.
-            session: Optional session used to request external URIs with.
+            session: Optional HTTP session used to request external URIs with.
                 Useful to set headers, proxies, cookies, and so forth.
         """
         if not isinstance(m3u_key, Key):

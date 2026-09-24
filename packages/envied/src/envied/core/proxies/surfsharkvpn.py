@@ -11,9 +11,9 @@ from envied.core.proxies.proxy import Proxy
 class SurfsharkVPN(Proxy):
     def __init__(self, username: str, password: str, server_map: Optional[dict[str, int]] = None):
         """
-        Proxy Service using SurfsharkVPN Service Credentials.
+        Proxy provider that uses SurfsharkVPN Service Credentials.
 
-        A username and password must be provided. These are Service Credentials, not your Login Credentials.
+        You must give a username and password. These are Service Credentials, not your Login Credentials.
         The Service Credentials can be found here: https://my.surfshark.com/vpn/manual-setup/main/openvpn
         """
         if not username:
@@ -50,6 +50,9 @@ class SurfsharkVPN(Proxy):
         - Country ID: "228"
         - Specific server: "us-bos" (Boston)
         - City selection: "us:seattle", "ca:toronto"
+
+        Returns None if SurfsharkVPN has no servers in the queried country. A city with no matching
+        server raises ValueError.
         """
         query = query.lower()
         city = None
@@ -64,28 +67,22 @@ class SurfsharkVPN(Proxy):
             hostname = f"{query}.prod.surfshark.com"
         else:
             if query.isdigit():
-                # country id
                 country = self.get_country(by_id=int(query))
             elif re.match(r"^[a-z]+$", query):
-                # country code
                 country = self.get_country(by_code=query)
             else:
                 raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
             if not country:
-                # SurfsharkVPN doesnt have servers in this region
                 return
 
-            # Check server_map for pinned servers (can include city)
             server_map_key = f"{country['countryCode'].lower()}:{city}" if city else country["countryCode"].lower()
             server_mapping = self.server_map.get(server_map_key) or (
                 self.server_map.get(country["countryCode"].lower()) if not city else None
             )
 
             if server_mapping:
-                # country was set to a specific server ID in config
                 hostname = f"{country['code'].lower()}{server_mapping}.prod.surfshark.com"
             else:
-                # get the random server ID
                 random_server = self.get_random_server(country["countryCode"], city)
                 if not random_server:
                     raise ValueError(
@@ -97,7 +94,7 @@ class SurfsharkVPN(Proxy):
         return f"https://{self.username}:{self.password}@{hostname}:443"
 
     def get_country(self, by_id: Optional[int] = None, by_code: Optional[str] = None) -> Optional[dict]:
-        """Search for a Country and it's metadata."""
+        """Find a Country and its metadata."""
         if all(x is None for x in (by_id, by_code)):
             raise ValueError("At least one search query must be made.")
 
@@ -123,7 +120,6 @@ class SurfsharkVPN(Proxy):
         """
         servers = [x for x in self.countries if x["countryCode"].lower() == country_id.lower()]
 
-        # Filter by city if specified
         if city:
             city_lower = city.lower()
             # Check if servers have a 'location' field for city filtering
@@ -145,7 +141,6 @@ class SurfsharkVPN(Proxy):
         if not servers:
             raise ValueError(f"Could not get random server for country '{country_id}': no servers found.")
 
-        # Only include servers that actually have a connection name to avoid KeyError.
         connection_names = [x["connectionName"] for x in servers if "connectionName" in x]
         if not connection_names:
             raise ValueError(

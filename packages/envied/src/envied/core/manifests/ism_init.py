@@ -2,12 +2,12 @@
 Synthesize an ISO-BMFF initialization segment (ftyp + moov) for ISM / Smooth
 Streaming tracks.
 
-Smooth Streaming fragments are bare ``moof`` + ``mdat`` pairs; the server never
-sends a ``moov``. The init box must be reconstructed from the manifest's
-``CodecPrivateData`` (and, for protected content, the track KID) before a muxer
-or decryptor such as shaka-packager can parse the stream. Ported from yt-dlp's
-``write_piff_header`` and N_m3u8DL-RE's ``MSSMoovProcessor`` with HEVC, Dolby
-Vision, EC-3, TTML and CENC (PIFF) support.
+Smooth Streaming fragments are bare ``moof`` + ``mdat`` pairs. The server never
+sends a ``moov``. unshackle must reconstruct the init box from the manifest's
+``CodecPrivateData`` (and, for a protected track, the track KID) before a muxer
+or decryptor such as shaka-packager can parse the track. Ported from yt-dlp's
+``write_piff_header`` and N_m3u8DL-RE's ``MSSMoovProcessor``. This port also
+writes the HEVC, Dolby Vision, EC-3, TTML and CENC (PIFF) boxes.
 
 ``piff_senc_to_cenc`` rewrites the fragments themselves, which neither port does:
 shaka-packager cannot read the PIFF sample-encryption box, so its payload is
@@ -20,7 +20,6 @@ import binascii
 import struct
 from typing import Iterator, Optional
 
-# Big-endian field packers (named for the bit widths they encode).
 u8 = struct.Struct(">B")
 u16 = struct.Struct(">H")
 u32 = struct.Struct(">I")
@@ -31,8 +30,7 @@ s1616 = struct.Struct(">hxx")  # 16.16 fixed-point
 u1616 = struct.Struct(">Hxx")
 s32 = struct.Struct(">i")
 
-# 3x3 transformation matrix (identity), as stored in tkhd/mvhd.
-# Exactly 9 int32s; extras shift every field after it and desync pymp4.
+# The tkhd/mvhd matrix is exactly 9 int32s; extras shift every field after it and desync pymp4.
 UNITY_MATRIX = (
     s32.pack(0x10000)
     + s32.pack(0) * 2
@@ -48,7 +46,7 @@ TRACK_IN_MOVIE = 0x2
 TRACK_IN_PREVIEW = 0x4
 SELF_CONTAINED = 0x1
 
-# Fixed creation/modification time — deterministic output (no wall clock).
+# Fixed creation/modification time for deterministic output (no wall clock).
 EPOCH = 0
 
 NAL_START_CODE = b"\x00\x00\x00\x01"
@@ -62,7 +60,6 @@ PIFF_SENC_UUID = bytes.fromhex("A2394F525A9B4F14A2446C427C648DF4")
 
 TTML_NAMESPACE = b"http://www.w3.org/ns/ttml\0"
 
-# ISO/IEC 14496-3 samplingFrequencyIndex table for AudioSpecificConfig.
 AAC_SAMPLING_FREQUENCY_INDEX = {
     96000: 0x0,
     88200: 0x1,
@@ -97,9 +94,9 @@ def split_nal_units(codec_private_data: bytes) -> list[bytes]:
 
 
 def remove_emulation_prevention(data: bytes) -> bytes:
-    """Strip H.26x emulation-prevention bytes (the 0x03 in any 00 00 03 run).
+    """Remove H.26x emulation-prevention bytes (the 0x03 in any 00 00 03 run).
 
-    The byte after a consumed escape is data — even another 0x03 — so the scan
+    The byte after a consumed escape is data, even another 0x03, so the scan
     must skip past it rather than re-examine (a naive trailing-window check
     over-strips consecutive escapes and shifts every later bit position).
     """
@@ -145,7 +142,7 @@ class BitReader:
 
 
 def read_hevc_sps_to_bit_depth(r: BitReader) -> tuple[int, int, int, int]:
-    """Advance reader through bit_depth_chroma_minus8; returns
+    """Advance reader through bit_depth_chroma_minus8. Returns
     (chroma_format_idc, bit_depth_luma, bit_depth_chroma, max_sub_layers_minus1)."""
     r.read_bits(16)  # NAL unit header
     r.read_bits(4)  # sps_video_parameter_set_id
@@ -205,7 +202,7 @@ def skip_hevc_scaling_list_data(r: BitReader) -> None:
 
 
 def skip_hevc_st_ref_pic_set(r: BitReader, idx: int, num_delta_pocs: list[int]) -> int:
-    """Skip one st_ref_pic_set() (H.265 7.3.7); returns its NumDeltaPocs."""
+    """Skip one st_ref_pic_set() (H.265 7.3.7). Returns its NumDeltaPocs."""
     if idx and r.read_bits(1):  # inter_ref_pic_set_prediction_flag
         r.read_bits(1)  # delta_rps_sign
         r.read_ue()  # abs_delta_rps_minus1
@@ -226,7 +223,7 @@ def skip_hevc_st_ref_pic_set(r: BitReader, idx: int, num_delta_pocs: list[int]) 
 
 def parse_hevc_sps_vui(sps_rbsp: bytes) -> tuple[Optional[tuple[int, int, int]], Optional[float]]:
     """((colour_primaries, transfer_characteristics, matrix_coeffs), fps) from a
-    de-emulated HEVC SPS VUI; either element is None when absent."""
+    de-emulated HEVC SPS VUI. Either element is None when absent."""
     r = BitReader(sps_rbsp)
     _, _, _, max_sub_layers_minus1 = read_hevc_sps_to_bit_depth(r)
     log2_max_poc_lsb_minus4 = r.read_ue()
@@ -290,10 +287,10 @@ HEVC_FOURCCS = frozenset(("HVC1", "HEV1", "HEVC", "H265", "DVHE", "DVH1"))
 def parse_codec_private_data_vui(
     fourcc: str, codec_private_data: bytes
 ) -> tuple[Optional[tuple[int, int, int]], Optional[float]]:
-    """(colour triple, fps) from the SPS VUI in HEVC CodecPrivateData; (None, None)
-    when the codec is unsupported or the data is malformed. H.264 is excluded
-    on purpose: its VUI timing is field-based and often misdeclared, so fps
-    read from it can't be trusted."""
+    """(colour triple, fps) from the SPS VUI in HEVC CodecPrivateData. Gives
+    (None, None) for a codec this parser does not read, and for malformed data.
+    This parser excludes H.264 on purpose: its VUI timing is field-based and
+    often misdeclared, so unshackle cannot trust the fps it reads from there."""
     if (fourcc or "").upper() not in HEVC_FOURCCS:
         return None, None
     try:
@@ -307,18 +304,19 @@ def parse_codec_private_data_vui(
 
 
 def parse_codec_private_data_colour(fourcc: str, codec_private_data: bytes) -> Optional[tuple[int, int, int]]:
-    """SPS VUI colour triple from HEVC CodecPrivateData; None when the codec
-    is unsupported, no colour description, or malformed data."""
+    """SPS VUI colour triple from HEVC CodecPrivateData. Gives None for a codec
+    this parser does not read, for data with no colour description, and for
+    malformed data."""
     return parse_codec_private_data_vui(fourcc, codec_private_data)[0]
 
 
 def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, Optional[bytes], int, int]]:
     """Yield (type, uuid_usertype, payload_start, box_end) for each child box.
 
-    Stops silently at the first box whose declared size cannot be walked. A short
-    result therefore reports how far the walk got, and a caller counting survivors
-    should treat it as unverified. box_end may exceed end when the declared size
-    overruns; clamp it before slicing.
+    Stops silently at the first box with a declared size the walk cannot follow.
+    A short result therefore reports how far the walk got, and a caller that counts
+    survivors must treat it as unverified. box_end may exceed end when the declared
+    size overruns. Clamp it before slicing.
     """
     offset = start
     while offset + 8 <= end:
@@ -341,7 +339,7 @@ def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, Optio
 
 
 def find_box(data: bytes, start: int, end: int, target: bytes) -> Optional[tuple[int, int]]:
-    """Find the first child box of the given type; return (payload_start, end)."""
+    """Find the first child box of the given type. Returns (payload_start, end)."""
     for box_type, _, body, box_end in iter_boxes(data, start, end):
         if box_type == target:
             return body, box_end
@@ -351,9 +349,9 @@ def find_box(data: bytes, start: int, end: int, target: bytes) -> Optional[tuple
 def read_track_id(fragment: bytes) -> Optional[int]:
     """Read the track_ID from a fragment's moof/traf/tfhd box, if present.
 
-    Smooth fragments declare their own track_ID; the synthesized moov must use
+    Smooth fragments declare their own track_ID. The synthesized moov must use
     the same value or the muxer cannot associate samples with the track. The
-    track_ID sits before any tfhd optional fields, so the flags don't matter.
+    track_ID sits before any tfhd optional fields, so the flags do not matter.
     """
     moof = find_box(fragment, 0, len(fragment), b"moof")
     if not moof:
@@ -442,8 +440,8 @@ def piff_senc_to_cenc(fragment: bytes, iv_size: int = 8) -> bytes:
 
     shaka-packager does not consume the PIFF uuid form. It finds no per-sample IVs, falls
     through to the constant-IV path, and aborts with "IV cannot be empty". mp4decrypt
-    accepts either form, and the payloads are identical once the optional override header
-    is stripped, so emitting 'senc' serves both decrypters.
+    accepts either form, and the payloads are identical without the optional override
+    header, so emitting 'senc' serves both decrypters.
 
     The rewrite preserves length: bytes reclaimed from the uuid header become a 'free' box.
     The moof's byte length must stay the same. trun's data_offset resolves against tfhd's
@@ -506,7 +504,7 @@ def piff_senc_to_cenc(fragment: bytes, iv_size: int = 8) -> bytes:
 
 
 def build_avcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
-    """Build an avcC (AVC decoder config) box from SPS+PPS CodecPrivateData."""
+    """Assemble an avcC (AVC decoder config) box from SPS+PPS CodecPrivateData."""
     nals = split_nal_units(codec_private_data)
     # Pick parameter sets by H.264 NAL type (low 5 bits): 7 = SPS, 8 = PPS.
     # Manifests do not guarantee SPS-first ordering.
@@ -524,17 +522,72 @@ def build_avcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
     return box(b"avcC", payload)
 
 
+DV_LEVELS = (
+    (1280 * 720 * 24, 1280, 1),
+    (1280 * 720 * 30, 1280, 2),
+    (1920 * 1080 * 24, 1920, 3),
+    (1920 * 1080 * 30, 2560, 4),
+    (1920 * 1080 * 60, 3840, 5),
+    (3840 * 2160 * 24, 3840, 6),
+    (3840 * 2160 * 30, 3840, 7),
+    (3840 * 2160 * 48, 3840, 8),
+    (3840 * 2160 * 60, 3840, 9),
+    (3840 * 2160 * 120, 3840, 10),
+    (3840 * 2160 * 120, 7680, 11),
+    (7680 * 4320 * 60, 7680, 12),
+    (7680 * 4320 * 120, 7680, 13),
+)
+
+
+def infer_dv_profile(cicp: Optional[tuple[int, int, int]]) -> tuple[int, int]:
+    """Derive (dv_profile, dv_bl_signal_compatibility_id) from the base layer's colour description.
+
+    Profile 5 carries no usable description, while profile 8 stays backward compatible
+    with HDR10 (PQ) or HLG and says so.
+    """
+    transfer = cicp[1] if cicp else 0
+    if transfer == 16:
+        return 8, 1
+    if transfer == 18:
+        return 8, 4
+    return 5, 0
+
+
+def build_dvcc(width: int, height: int, fps: Optional[float], cicp: Optional[tuple[int, int, int]]) -> bytes:
+    """
+    Assemble the Dolby Vision decoder config box for a single-layer Dolby Vision track:
+    dvcC, or dvvC when the profile is cross-compatible.
+
+    A dvh1/dvhe sample entry without this box describes itself as plain HEVC, so every
+    reader downstream (muxers, players, MediaInfo) loses the Dolby Vision signalling even
+    though the RPU NAL units are present in the elementary stream.
+
+    The base layer's colour description separates the two single-layer profiles: profile 5
+    carries no usable description, while profile 8 stays backward compatible with HDR10 (PQ)
+    or HLG and says so (see infer_dv_profile). Level is the first entry in the Dolby table
+    that allows both the pixel rate and the width.
+    """
+    profile, compatibility_id = infer_dv_profile(cicp)
+
+    pixel_rate = width * height * (fps or 25.0)
+    level = next((lvl for pps, max_width, lvl in DV_LEVELS if pixel_rate <= pps and width <= max_width), 13)
+
+    flags = (profile << 9) | (level << 3) | (1 << 2) | (0 << 1) | 1
+    payload = u8.pack(1) + u8.pack(0) + u16.pack(flags) + u32.pack(compatibility_id << 28) + b"\x00" * 16
+    return box(b"dvvC" if profile > 7 else b"dvcC", payload)
+
+
 def build_hvcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
     """
-    Build an hvcC (HEVC decoder config) box from VPS+SPS+PPS CodecPrivateData.
+    Assemble an hvcC (HEVC decoder config) box from SPS+PPS CodecPrivateData, and
+    include the VPS when the CodecPrivateData carries one.
 
-    Profile/tier/level bytes are lifted from the SPS profile_tier_level; chroma
-    format and bit depths are parsed from the SPS so 10-bit/HDR streams signal
-    correctly (falls back to 8-bit 4:2:0 on malformed SPS data).
+    The profile/tier/level bytes come from the SPS profile_tier_level. This
+    function reads the chroma format and the bit depths from the SPS, so 10-bit
+    and HDR tracks signal correctly. On malformed SPS data it falls back to
+    8-bit 4:2:0.
     """
     nals = split_nal_units(codec_private_data)
-    if len(nals) < 3:
-        raise ValueError("HEVC CodecPrivateData must contain VPS, SPS and PPS NAL units")
 
     # Group NAL units by type (HEVC NAL type = (first byte >> 1) & 0x3F).
     by_type: dict[int, list[bytes]] = {}
@@ -542,7 +595,10 @@ def build_hvcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
         nal_type = (nal[0] >> 1) & 0x3F
         by_type.setdefault(nal_type, []).append(nal)
 
-    sps = by_type.get(33, [b""])[0]
+    if not by_type.get(33) or not by_type.get(34):
+        raise ValueError("HEVC CodecPrivateData must contain SPS and PPS NAL units")
+
+    sps = by_type[33][0]
     # profile_tier_level must be read from the de-emulated SPS RBSP, after the
     # 2-byte NAL header + 1 byte (sps_video_parameter_set_id(4) +
     # sps_max_sub_layers_minus1(3) + sps_temporal_id_nesting_flag(1)). PTL is 12
@@ -589,7 +645,7 @@ def build_hvcc(codec_private_data: bytes, nal_length_size: int = 4) -> bytes:
 
 
 def build_esds(codec_private_data: bytes) -> bytes:
-    """Build an esds box wrapping the AAC AudioSpecificConfig."""
+    """Assemble an esds box that wraps the AAC AudioSpecificConfig."""
     asc = codec_private_data
     # DecoderSpecificInfo (tag 0x05)
     dsi = u8.pack(0x05) + u8.pack(len(asc)) + asc
@@ -611,13 +667,13 @@ def build_esds(codec_private_data: bytes) -> bytes:
 
 
 def build_dec3(codec_private_data: bytes) -> Optional[bytes]:
-    """Build a dec3 (EC-3 specific) box from Smooth EC-3 CodecPrivateData.
+    """Assemble a dec3 (EC-3 specific) box from Smooth EC-3 CodecPrivateData.
 
     Smooth EC-3 CodecPrivateData ([MS-SSTR] AudioTag 65534) serializes a
-    WAVEFORMATEXTENSIBLE — sometimes the full structure, sometimes only its
-    extension (samples-per-block + channel mask + DD+ SubFormat GUID) — with
+    WAVEFORMATEXTENSIBLE, sometimes the full structure, sometimes only its
+    extension (samples-per-block + channel mask + DD+ SubFormat GUID), with
     the raw dec3 payload (ETSI TS 102 366 F.6) after the GUID. Returns None
-    when the GUID is absent — decoders still sync from EC-3 frames in mdat.
+    when the GUID is absent. Decoders still sync from EC-3 frames in mdat.
     """
     guid_at = codec_private_data.find(DOLBY_DIGITAL_PLUS_GUID)
     if guid_at != -1 and len(codec_private_data) > guid_at + 16:
@@ -626,9 +682,9 @@ def build_dec3(codec_private_data: bytes) -> Optional[bytes]:
 
 
 def synthesize_aac_codec_private_data(fourcc: str, sampling_rate: int, channels: int) -> bytes:
-    """Generate the AAC AudioSpecificConfig when the manifest omits it.
+    """Make the AAC AudioSpecificConfig when the manifest omits it.
 
-    AACL -> 2-byte AAC-LC config; AACH -> 4-byte HE-AAC (SBR, AOT 5) config
+    AACL -> 2-byte AAC-LC config. AACH -> 4-byte HE-AAC (SBR, AOT 5) config
     with the extension sampling frequency at twice the core rate.
     """
     freq = AAC_SAMPLING_FREQUENCY_INDEX.get(sampling_rate, 0x0)
@@ -639,7 +695,7 @@ def synthesize_aac_codec_private_data(fourcc: str, sampling_rate: int, channels:
                 (0x05 << 3) | (freq >> 1),
                 ((freq & 0x01) << 7) | (channels << 3) | (ext_freq >> 1),
                 ((ext_freq & 0x01) << 7) | (0x02 << 2),  # core object type = AAC LC
-                0x00,  # alignment bits
+                0x00,
             )
         )
     return bytes(((0x02 << 3) | (freq >> 1), ((freq & 0x01) << 7) | (channels << 3)))
@@ -651,10 +707,10 @@ def build_sinf(
     iv_size: int = 8,
     constant_iv: Optional[bytes] = None,
 ) -> bytes:
-    """Build a sinf protection box (frma + schm cenc + schi/tenc) for CENC.
+    """Assemble a sinf protection box (frma + schm CENC + schi/tenc) for CENC.
 
-    iv_size is the tenc default_Per_Sample_IV_Size (8 or 16). When constant_iv
-    is given, the per-sample IV size is 0 and the constant IV is appended per
+    iv_size is the tenc default_Per_Sample_IV_Size (8 or 16). With a constant_iv,
+    the per-sample IV size is 0 and this function appends the constant IV per
     ISO/IEC 23001-7 (cbcs-style constant-IV form).
     """
     frma = box(b"frma", original_format)
@@ -692,16 +748,17 @@ def build_init_segment(
     constant_iv: Optional[bytes] = None,
 ) -> bytes:
     """
-    Build a complete ftyp + moov initialization segment.
+    Assemble a complete ftyp + moov initialization segment.
 
     stream_type: "video" | "audio" | "text".
     fourcc: Smooth FourCC ("H264"/"AVC1"/"DAVC", "HVC1"/"HEV1"/"HEVC"/"H265",
             "DVHE"/"DVH1", "AACL"/"AACH"/"AAC", "EC-3", "TTML"/"STPP"/"DFXP").
-            Only "HEV1" yields an hev1 sample entry; the rest of that group yield
-            hvc1, which requires its parameter sets in the sample entry.
+            Only "HEV1" yields an hev1 sample entry. The rest of that group yield
+            hvc1, which needs its parameter sets in the sample entry.
     codec_private_data: hex string from the manifest QualityLevel.
     nal_length_size: manifest NALUnitLengthField (bytes per NAL length prefix).
-    kid: 16-byte default key id; when set, the sample entry is wrapped for CENC.
+    kid: 16-byte default key id. When set, this function wraps the sample entry
+         for CENC.
     iv_size / constant_iv: tenc IV form (see build_sinf).
     """
     if stream_type not in ("video", "audio", "text"):
@@ -715,11 +772,12 @@ def build_init_segment(
     if len(lang) != 3 or not all("a" <= c <= "z" for c in lang):
         lang = "und"
 
-    # --- ftyp ---
-    ftyp = box(b"ftyp", b"isml" + u32.pack(1) + b"iso5" + b"iso6" + b"piff" + b"msdh")
+    brands = b"iso5" + b"iso6" + b"piff" + b"msdh"
+    if stream_type == "video" and fourcc in ("DVHE", "DVH1"):
+        brands += b"dby1"
+    ftyp = box(b"ftyp", b"isml" + u32.pack(1) + brands)
 
-    # --- mvhd ---
-    # version 1: at the 10 MHz ISM timescale a 32-bit duration overflows after ~429s
+    # version 1: at the 10 MHz ISM timescale a 32-bit duration overflows after ~429s.
     mvhd = full_box(
         b"mvhd",
         1,
@@ -737,7 +795,6 @@ def build_init_segment(
         + u32.pack(0xFFFFFFFF),
     )
 
-    # --- tkhd ---
     tkhd = full_box(
         b"tkhd",
         1,
@@ -757,7 +814,6 @@ def build_init_segment(
         + u1616.pack(height),
     )
 
-    # --- mdhd + hdlr ---
     packed_lang = ((ord(lang[0]) - 0x60) << 10) | ((ord(lang[1]) - 0x60) << 5) | (ord(lang[2]) - 0x60)
     mdhd = full_box(
         b"mdhd",
@@ -780,11 +836,9 @@ def build_init_segment(
         hdlr = full_box(b"hdlr", 0, 0, u32.pack(0) + b"vide" + u32.pack(0) * 3 + b"VideoHandler\0")
         media_header = full_box(b"vmhd", 0, 1, u16.pack(0) + u16.pack(0) * 3)
 
-    # --- dinf ---
     dref = full_box(b"dref", 0, 0, u32.pack(1) + full_box(b"url ", 0, SELF_CONTAINED, b""))
     dinf = box(b"dinf", dref)
 
-    # --- stsd sample entry ---
     sample_entry_payload = u8.pack(0) * 6 + u16.pack(1)  # reserved + data reference index
     if stream_type == "video":
         sample_entry_payload += (
@@ -811,9 +865,14 @@ def build_init_segment(
             # (and the frma inside sinf).
             codec_fourcc = b"hev1" if fourcc == "HEV1" else b"hvc1"
         elif fourcc in ("DVHE", "DVH1"):
-            # Dolby Vision over HEVC: same hvcC config, dvh1 sample entry.
-            config_box = build_hvcc(cpd, nal_length_size)
-            codec_fourcc = b"dvh1"
+            # Dolby Vision over HEVC: same hvcC config plus the dvcC/dvvC that tells
+            # readers the RPU NAL units in the elementary stream are Dolby Vision.
+            cicp, fps = parse_codec_private_data_vui(fourcc, cpd)
+            config_box = build_hvcc(cpd, nal_length_size) + build_dvcc(width, height, fps, cicp)
+            if infer_dv_profile(cicp)[0] > 7:
+                codec_fourcc = b"hev1" if fourcc == "DVHE" else b"hvc1"
+            else:
+                codec_fourcc = b"dvh1"
         else:
             raise NotImplementedError(f"Unsupported video FourCC: {fourcc}")
         sample_entry_payload += config_box
@@ -850,7 +909,7 @@ def build_init_segment(
             sample_entry_box = box(b"enca", sample_entry_payload)
         else:
             sample_entry_box = box(codec_fourcc, sample_entry_payload)
-    else:  # text
+    else:
         if fourcc in ("TTML", "STPP", "DFXP"):
             # XMLSubtitleSampleEntry: namespace + schema_location + aux mime types.
             sample_entry_payload += TTML_NAMESPACE + b"\0" + b"\0"
@@ -864,7 +923,6 @@ def build_init_segment(
     # second config to build. The server's larger second entry only repeats its VPS.
     stsd = full_box(b"stsd", 0, 0, u32.pack(2) + sample_entry_box * 2)
 
-    # --- empty sample tables (fragmented: real samples live in moof/traf) ---
     stbl = box(
         b"stbl",
         stsd
@@ -878,7 +936,6 @@ def build_init_segment(
     mdia = box(b"mdia", mdhd + hdlr + minf)
     trak = box(b"trak", tkhd + mdia)
 
-    # --- mvex (mehd + trex) signals a fragmented file ---
     mehd = full_box(b"mehd", 1, 0, u64.pack(duration))
     trex = full_box(
         b"trex",

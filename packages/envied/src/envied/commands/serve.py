@@ -1,6 +1,11 @@
+import asyncio
 import hmac
 import logging
+import re
 import subprocess
+import sys
+from contextlib import suppress
+from datetime import datetime
 
 import click
 from aiohttp import web
@@ -8,10 +13,82 @@ from aiohttp import web
 from envied.core import binaries
 from envied.core.api import cors_middleware, setup_routes, setup_swagger
 from envied.core.api.compression import compression_middleware
-from envied.core.api.handlers import request_secret_key
+from envied.core.api.events import publish_refresh_events, publish_service_event
+from envied.core.api.handlers import (
+    DASHBOARD_PREFIX,
+    api_key_authentication,
+    dashboard_authentication,
+    dashboard_key,
+    rate_limit_response,
+    request_secret_key,
+    server_account_regions,
+    validate_server_accounts,
+)
+from envied.core.api.stats import key_rate_limit, rate_limit_error, ring, stats, stats_middleware
 from envied.core.config import config
+from envied.core.console import console
 from envied.core.constants import context_settings
 from envied.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
+
+
+class _MaskAccessKey(logging.Filter):
+    """Mask the ``secret_key`` query parameter the SSE routes accept before the access line is stored."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str) and "secret_key=" in record.msg:
+            record.msg = re.sub(r"secret_key=[^&\s]*", "secret_key=***", record.msg)
+        return True
+
+
+def _install_service_refresh(app: web.Application) -> None:
+    """Report service load issues, then periodically pull the service repos and hot-reload changed services."""
+    from envied.core import services
+
+    log = logging.getLogger("serve")
+    services.log_load_issues()
+    services.record_loaded_commits()
+    interval = int(config.serve.get("services_refresh_interval", 0) or 0)
+    if interval <= 0 or not services.repo_specs():
+        return
+
+    async def loop() -> None:
+        from envied.core.api.download_manager import busy_services, schedule_pending_reload
+
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                applied = await asyncio.to_thread(services.apply_pending, busy_services())
+                if applied:
+                    log.info(f"Services reloaded: {', '.join(applied)}")
+                    publish_service_event("applied", applied)
+                repos = await asyncio.to_thread(services.refresh_and_reload, busy_services())
+                for r in repos:
+                    if r["changes"]:
+                        log.info(f"Services refreshed {r['spec']}: {', '.join(r['changes'])}")
+                    if r["deferred"]:
+                        log.info(f"Services staged until their jobs and sessions finish: {', '.join(r['deferred'])}")
+                    for err in r["load_errors"]:
+                        log.error(f"Service reload failed: {err}")
+                publish_refresh_events(repos)
+                # The busy set was read before the pull. A tag whose last session ended during the pull
+                # is staged although idle, and its session-end trigger ran before it was staged.
+                schedule_pending_reload()
+            except Exception:
+                log.exception("Service refresh failed")
+
+    async def start(_app: web.Application) -> None:
+        _app["service_refresh_task"] = asyncio.create_task(loop())
+        log.info(f"Service repos refresh every {interval}s")
+
+    async def stop(_app: web.Application) -> None:
+        task = _app.get("service_refresh_task")
+        if task:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+    app.on_startup.append(start)
+    app.on_cleanup.append(stop)
 
 
 @click.command(
@@ -45,6 +122,13 @@ from envied.core.downloaders import format_speed, parse_speed_limit, set_speed_l
     default=False,
     help="Only expose remote service session endpoints (health, services, search, session).",
 )
+@click.option(
+    "-q",
+    "--quiet",
+    is_flag=True,
+    default=False,
+    help="Headless mode: no banner and no Rich output, plain log lines on stderr.",
+)
 def serve(
     host: str,
     port: int,
@@ -56,14 +140,15 @@ def serve(
     debug_api: bool,
     debug: bool,
     remote_only: bool,
+    quiet: bool,
 ) -> None:
     """
     Serve your Local Widevine and PlayReady Devices and REST API for Remote Access.
 
     \b
     CDM ENDPOINTS:
-    - Widevine: /{device}/open, /{device}/close/{session_id}, etc.
-    - PlayReady: /playready/{device}/open, /playready/{device}/close/{session_id}, etc.
+    - Widevine: /{device}/open, /{device}/close/{session_id}, and others
+    - PlayReady: /playready/{device}/open, /playready/{device}/close/{session_id}, and others
 
     \b
     You may serve with Caddy at the same time with --caddy. You can use Caddy
@@ -89,12 +174,36 @@ def serve(
 
     log = logging.getLogger("serve")
 
+    if quiet:
+        logging.basicConfig(
+            force=True,
+            level=logging.DEBUG if debug else logging.INFO,
+            format="%(asctime)s %(name)s %(levelname)s %(message)s",
+            stream=sys.stderr,
+        )
+        console.quiet = True
+        if not debug:
+            for handler in logging.getLogger().handlers:
+                handler.addFilter(lambda record: record.name != "aiohttp.access")
+        if debug:
+            log_path = config.directories.logs / config.filenames.log.format(
+                name="serve", time=datetime.now().strftime("%Y%m%d-%H%M%S")
+            )
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+            logging.getLogger().addHandler(file_handler)
+            log.info(f"Writing log to {log_path}")
+    elif debug:
+        logging.getLogger().setLevel(logging.DEBUG)
     if debug:
-        logging.basicConfig(level=logging.DEBUG, format="%(name)s - %(levelname)s - %(message)s")
         log.info("Debug logging enabled for API operations")
-    else:
+    elif not quiet:
         logging.getLogger("api").setLevel(logging.WARNING)
         logging.getLogger("api.remote").setLevel(logging.WARNING)
+    ring.setFormatter(logging.Formatter("%(message)s"))
+    logging.getLogger().addHandler(ring)
+    logging.getLogger("aiohttp.access").addFilter(_MaskAccessKey())
 
     if not no_key:
         api_secret = config.serve.get("api_secret")
@@ -130,23 +239,16 @@ def serve(
             config.serve["playready_devices"] = []
         config.serve["playready_devices"].extend(list(config.directories.prds.glob("*.prd")))
 
-        @web.middleware
-        async def api_key_authentication(request: web.Request, handler) -> web.StreamResponse:
-            """Authenticate API requests using X-Secret-Key header."""
-            if request.path == "/api/health":
-                return await handler(request)
-            secret_key = request_secret_key(request)
-            if not secret_key:
-                return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
-            # Constant-time compare against every configured key so a valid key can't be
-            # recovered byte-by-byte from response timing.
-            if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
-                return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
-            return await handler(request)
-
         remote_only = remote_only or config.serve.get("remote_only", False)
         if remote_only:
             api_only = True
+        stats.host, stats.port = host, port
+        stats.mode = "remote_only" if remote_only else "api_only" if api_only else "full"
+        dashboard = bool(dashboard_key())
+        if dashboard:
+            log.info(f"Developer dashboard endpoints available at http://{host}:{port}/api/dashboard/")
+        elif quiet:
+            log.info("Developer dashboard disabled: set serve.dashboard.key in envied.yaml to enable it")
 
         try:
             global_speed_limit = parse_speed_limit(config.serve.get("global_speed_limit"))
@@ -159,31 +261,67 @@ def serve(
         global_services = config.serve.get("services")
         if global_services:
             log.info(f"Global service allowlist: {', '.join(global_services)}")
+        try:
+            server_accounts = validate_server_accounts()
+        except ValueError as e:
+            raise click.ClickException(str(e))
+        for tag in server_accounts:
+            regions = server_account_regions(tag) or {}
+            covered = list(regions.get("regions") or []) + (["global"] if regions.get("global") else [])
+            log.info(f"Server accounts for {tag}: {', '.join(covered)}")
+        if config.key_vaults and not any(v.get("type") == "SQLite" for v in config.key_vaults):
+            log.warning("No SQLite key vault configured: a content key a remote client proves wrong cannot be flagged")
         users = config.serve.get("users", {})
         if isinstance(users, dict):
             # yaml keys can parse as int; hmac.compare_digest and allowlist lookups need str
             users = {str(k): v for k, v in users.items()}
             config.serve["users"] = users
+        tiers = config.serve.get("tiers") or {}
+        if not isinstance(tiers, dict):
+            raise click.ClickException("serve.tiers must be a mapping of tier name to settings")
+        for tier_name, tier_cfg in tiers.items():
+            if not isinstance(tier_cfg, dict):
+                raise click.ClickException(f"serve.tiers.{tier_name} must be a mapping of setting to value")
+            if problem := rate_limit_error(f"serve.tiers.{tier_name}", tier_cfg.get("rate_limit")):
+                raise click.ClickException(problem)
         for user_key, user_cfg in users.items() if isinstance(users, dict) else []:
             user_services = user_cfg.get("services") if isinstance(user_cfg, dict) else None
+            username = user_cfg.get("username", user_key[:8] + "...") if isinstance(user_cfg, dict) else user_key[:8]
             if user_services:
-                username = user_cfg.get("username", user_key[:8] + "...")
                 log.info(f"User '{username}' restricted to services: {', '.join(user_services)}")
+            tier = user_cfg.get("tier") if isinstance(user_cfg, dict) else None
+            if tier and tier not in tiers:
+                raise click.ClickException(f"serve.users.{username}.tier: no such tier '{tier}' under serve.tiers")
+            if isinstance(user_cfg, dict):
+                if problem := rate_limit_error(f"serve.users.{username}", user_cfg.get("rate_limit")):
+                    raise click.ClickException(problem)
+            limit = key_rate_limit(user_key)
+            if limit:
+                log.info(f"User '{username}' rate limited to {limit} requests/hour")
 
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
-                app = web.Application(middlewares=[cors_middleware, compression_middleware])
+                app = web.Application(
+                    middlewares=[cors_middleware, stats_middleware, dashboard_authentication, compression_middleware]
+                )
                 app["config"] = {"users": {}}
             else:
-                app = web.Application(middlewares=[cors_middleware, api_key_authentication, compression_middleware])
+                app = web.Application(
+                    middlewares=[
+                        cors_middleware,
+                        stats_middleware,
+                        dashboard_authentication,
+                        api_key_authentication,
+                        compression_middleware,
+                    ]
+                )
                 api_users: dict = {api_secret: {"devices": [], "username": "api_user"}}
                 if isinstance(users, dict):
                     api_users.update(users)
                 app["config"] = {"users": api_users}
             app["debug_api"] = debug_api
 
-            # Start session cleanup loop for remote-dl sessions
             from envied.core.api.session_store import get_session_store
 
             session_store = get_session_store()
@@ -197,10 +335,11 @@ def serve(
 
             app.on_startup.append(start_session_cleanup)
             app.on_cleanup.append(stop_session_cleanup)
+            _install_service_refresh(app)
 
-            setup_routes(app, remote_only=remote_only)
+            setup_routes(app, remote_only=remote_only, dashboard=dashboard)
             if not remote_only:
-                setup_swagger(app)
+                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             else:
@@ -225,8 +364,8 @@ def serve(
             wvd_device_names = [d.stem if hasattr(d, "stem") else str(d) for d in wvd_devices]
             prd_device_names = [d.stem if hasattr(d, "stem") else str(d) for d in prd_devices]
 
-            if not serve_config.get("users") or not isinstance(serve_config["users"], dict):
-                serve_config["users"] = {}
+            users_cfg = serve_config.get("users")
+            serve_config["users"] = dict(users_cfg) if isinstance(users_cfg, dict) else {}
 
             if not no_key and api_secret not in serve_config["users"]:
                 serve_config["users"][api_secret] = {
@@ -248,6 +387,16 @@ def serve(
                 @web.middleware
                 async def serve_authentication(request: web.Request, handler) -> web.StreamResponse:
                     secret_key = request_secret_key(request)
+                    if request.path.startswith(DASHBOARD_PREFIX):
+                        return await handler(request)
+                    if (
+                        request.path != "/api/health"
+                        and secret_key
+                        and any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"])
+                    ):
+                        limited = rate_limit_response(secret_key)
+                        if limited is not None:
+                            return limited
                     if serve_playready_flag and request.path in ("/playready", "/playready/"):
                         response = await handler(request)
                     elif secret_key and not request.headers.get("X-Secret-Key"):
@@ -269,15 +418,24 @@ def serve(
                 return serve_authentication
 
             if no_key:
-                app = web.Application(middlewares=[cors_middleware, compression_middleware])
+                app = web.Application(
+                    middlewares=[cors_middleware, stats_middleware, dashboard_authentication, compression_middleware]
+                )
             else:
                 serve_auth = create_serve_authentication(serve_playready and bool(prd_devices))
-                app = web.Application(middlewares=[cors_middleware, serve_auth, compression_middleware])
+                app = web.Application(
+                    middlewares=[
+                        cors_middleware,
+                        stats_middleware,
+                        dashboard_authentication,
+                        serve_auth,
+                        compression_middleware,
+                    ]
+                )
 
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
-            # Start session cleanup loop for remote-dl sessions
             from envied.core.api.session_store import get_session_store
 
             session_store = get_session_store()
@@ -291,6 +449,7 @@ def serve(
 
             app.on_startup.append(start_session_cleanup)
             app.on_cleanup.append(stop_session_cleanup)
+            _install_service_refresh(app)
 
             if serve_widevine:
                 app.on_startup.append(pywidevine_serve._startup)
@@ -335,14 +494,14 @@ def serve(
             elif serve_playready:
                 log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")
 
-            setup_routes(app, remote_only=remote_only)
+            setup_routes(app, remote_only=remote_only, dashboard=dashboard)
 
             if serve_widevine:
                 log.info(f"Widevine CDM endpoints available at http://{host}:{port}/{{device}}/open")
             if remote_only:
                 log.info(f"Remote service endpoints available at http://{host}:{port}/api/session/")
             else:
-                setup_swagger(app)
+                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             log.info("(Press CTRL+C to quit)")

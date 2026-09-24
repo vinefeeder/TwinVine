@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import sys
 from pathlib import Path
@@ -13,14 +14,17 @@ REDACTED = "***"
 # user:pass@ userinfo embedded in any URL (proxy URLs, remote server URLs)
 URL_USERINFO_RE = re.compile(r"(?<=://)[^/@]+@")
 
-# secret-bearing query parameters in URLs that end up in free text
-SENSITIVE_QUERY_PARAM_RE = re.compile(r"(?i)\b(password|passwd|pwd|token|api_key|apikey|secret|auth)=([^&#\s\"']+)")
+# secret-bearing query parameters in URLs that end up in free text; the affixes catch
+# access_token=, client_secret=, api-key= - "_" is a word character, so \b alone misses them
+SENSITIVE_QUERY_PARAM_RE = re.compile(
+    r"(?i)(?<![\w-])([\w-]*(?:password|passwd|pwd|token|api[_-]?key|secret)[\w-]*|auth)=([^&#\s\"']+)"
+)
 
 
 def redact_text(text: Optional[str], secrets: Iterable[str] = ()) -> Optional[str]:
     """
     Mask URL userinfo, secret-bearing query parameters, and any known secret
-    strings inside a free-text value before it is logged or serialized.
+    strings inside a free-text value before unshackle logs or serializes it.
     """
     if not isinstance(text, str) or not text:
         return text
@@ -32,8 +36,33 @@ def redact_text(text: Optional[str], secrets: Iterable[str] = ()) -> Optional[st
     return text
 
 
+PROXY_USERINFO_RE = re.compile(r"(^|://)[^:/@]+(?::[^/@]*)?@")
+PROXY_HOST_RE = re.compile(r"(://(?:[^/@]*@)?)(\[[^\]]+\]|[^:/?#]+)")
+
+
+def mask_proxy(uri: str, mask_host: bool = False, allow_debug: bool = True) -> str:
+    """Replace proxy userinfo with ``xxxxx:xxxxx@host`` for console display.
+
+    ``mask_host`` also replaces the hostname and keeps the scheme and the port, for
+    a user-supplied proxy whose hostname identifies the account on its own.
+    The full URI passes through while DEBUG logging is active (``-d``), so a debug
+    run keeps the complete proxy URI and a normal run never shows the credentials.
+    Pass ``allow_debug=False`` where the output can reach more than the operator's
+    own terminal, such as ``serve`` logs and the dashboard, so that debug mode does
+    not widen the exposure.
+    """
+    if not isinstance(uri, str) or not uri:
+        return uri
+    if allow_debug and logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
+        return uri
+    uri = PROXY_USERINFO_RE.sub(r"\1xxxxx:xxxxx@", uri)
+    if mask_host:
+        uri = PROXY_HOST_RE.sub(r"\1xxxxx", uri)
+    return uri
+
+
 def safe_display_url(url: str) -> str:
-    """Rebuild a URL from its scheme/host/port/path only, so userinfo can never be logged."""
+    """Rebuild a URL from its scheme/host/port/path only, so unshackle can never log the userinfo."""
     parts = urlsplit(url)
     netloc = parts.hostname or ""
     if parts.port:
@@ -41,8 +70,8 @@ def safe_display_url(url: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
-def _path_bases() -> list[tuple[str, str]]:
-    """Local base directories to strip from logged paths, longest-first.
+def path_bases() -> list[tuple[str, str]]:
+    """Local base directories to remove from logged paths, longest-first.
 
     Anchors everything left of the unshackle install/root (and the venv / home dir) so an
     absolute path like ``/home/me/Projects/unshackle-live/temp`` logs as ``<unshackle>/temp``,
@@ -52,14 +81,14 @@ def _path_bases() -> list[tuple[str, str]]:
     try:
         # redact.py lives at <root>/unshackle/core/utils/redact.py -> parents[3] == project/install root
         candidates.append((str(Path(__file__).resolve().parents[3]), "<unshackle>"))
-    except Exception:
+    except (OSError, IndexError):
         pass
     for raw in (getattr(sys, "prefix", ""), getattr(sys, "base_prefix", "")):
         if raw:
             candidates.append((str(Path(raw)), "<venv>"))
     try:
         candidates.append((str(Path.home()), "~"))
-    except Exception:
+    except (OSError, RuntimeError):
         pass
 
     bases: list[tuple[str, str]] = []
@@ -74,10 +103,10 @@ def _path_bases() -> list[tuple[str, str]]:
     return bases
 
 
-_PATH_BASES = _path_bases()
+PATH_BASES = path_bases()
 
 
-def _path_redaction_enabled() -> bool:
+def path_redaction_enabled() -> bool:
     """Path-prefix redaction is on unless ``config.redact_paths`` is explicitly False."""
     try:
         from envied.core.config import config  # lazy: config doesn't import redact, so no cycle
@@ -90,12 +119,12 @@ def _path_redaction_enabled() -> bool:
 def redact_path(text: Optional[str]) -> Optional[str]:
     """Replace local base-directory prefixes (install root, venv, home) in ``text`` with tokens.
 
-    Idempotent and cheap; only touches strings that actually contain a known base dir, so URLs
+    Idempotent and cheap. It touches only the strings that contain a known base dir, so URLs
     and relative paths pass through unchanged. Disabled by ``config.redact_paths: false``.
     """
-    if not isinstance(text, str) or not text or not _path_redaction_enabled():
+    if not isinstance(text, str) or not text or not path_redaction_enabled():
         return text
-    for base, token in _PATH_BASES:
+    for base, token in PATH_BASES:
         if base in text:
             text = text.replace(base, token)
     return text
@@ -104,16 +133,16 @@ def redact_path(text: Optional[str]) -> Optional[str]:
 # any http(s) URL embedded in free text (content/manifest/segment/api locations)
 URL_RE = re.compile(r"https?://[^\s\"'<>\\]+", re.IGNORECASE)
 # a plausible file extension to preserve (e.g. .mpd, .m3u8, .mp4, .m4s, .vtt)
-_EXT_RE = re.compile(r"^\.[A-Za-z0-9]{1,5}$")
+EXT_RE = re.compile(r"^\.[A-Za-z0-9]{1,5}$")
 
 
-def _collapse_url(match: "re.Match[str]") -> str:
+def collapse_url(match: "re.Match[str]") -> str:
     url = match.group(0)
     try:
         suffix = Path(urlsplit(url).path).suffix
     except Exception:
         suffix = ""
-    if not _EXT_RE.match(suffix):
+    if not EXT_RE.match(suffix):
         suffix = ""
     return f"redacted{suffix}"
 
@@ -121,15 +150,25 @@ def _collapse_url(match: "re.Match[str]") -> str:
 def redact_url(text: Optional[str]) -> Optional[str]:
     """Collapse every http(s) URL in ``text`` to ``redacted[.ext]``.
 
-    Hides content/CDN/manifest/segment/api locations (host + path + query) from shareable debug
+    Hides media/CDN/manifest/segment/api locations (host + path + query) from shareable debug
     logs while keeping the file extension so the manifest/segment type stays visible
     (e.g. ``redacted.mpd``). Non-URL strings pass through unchanged.
     """
     if not isinstance(text, str) or not text:
         return text
-    return URL_RE.sub(_collapse_url, text)
+    return URL_RE.sub(collapse_url, text)
 
 
 def redact_all(text: Optional[str]) -> Optional[str]:
     """Full redaction for logged strings: secrets, then URLs, then local path prefixes."""
     return redact_path(redact_url(redact_text(text)))
+
+
+def redact_secrets(text: Optional[str]) -> Optional[str]:
+    """Redact text that goes back to the caller: secrets and local path prefixes only.
+
+    URLs stay readable. The caller supplied the URL that failed, or already holds it, so a
+    collapsed URL hides nothing from them. It only removes the useful part of a message like
+    ``404 Not Found: <url>``. Use ``redact_all`` for a debug log file that other people read.
+    """
+    return redact_path(redact_text(text))

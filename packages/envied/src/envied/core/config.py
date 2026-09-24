@@ -11,14 +11,62 @@ from appdirs import AppDirs
 from envied.core.service_repo import is_repo_spec
 from envied.core.utils.collections import ci_get
 
+# YAML reads a bare `no` (Norwegian) or `yes` (Nyankpa) as a boolean, so `lang: no` would
+# silently drop the language. These two are the only valid language tags that YAML coerces,
+# and no option under a LANGUAGE_KEYS name holds a boolean.
+BOOL_LANGUAGE_TAGS = {False: "no", True: "yes"}
+LANGUAGE_KEYS = frozenset(
+    {
+        "lang",
+        "v_lang",
+        "a_lang",
+        "s_lang",
+        "forced_s_lang",
+        "require_audio",
+        "require_video",
+        "require_subs",
+        "language_priority",
+        "default_language",
+        "video",
+        "audio",
+        "subtitle",
+        "subs_contain",
+        "subs_contain_all",
+    }
+)
+
+OPAQUE_KEYS = frozenset({"tag_rules"})
+
+
+def restore_bool_languages(data: Any) -> Any:
+    """Put back the language tags ``no`` and ``yes``, which YAML reads as booleans."""
+    if isinstance(data, list):
+        return [restore_bool_languages(item) for item in data]
+    if not isinstance(data, dict):
+        return data
+
+    fixed = {}
+    for key, value in data.items():
+        if key in OPAQUE_KEYS:
+            fixed[key] = value
+            continue
+        if key in LANGUAGE_KEYS:
+            if isinstance(value, bool):
+                value = BOOL_LANGUAGE_TAGS[value]
+            elif isinstance(value, list):
+                value = [BOOL_LANGUAGE_TAGS[i] if isinstance(i, bool) else i for i in value]
+        fixed[key] = restore_bool_languages(value)
+
+    return fixed
+
 
 def resolve_decryption(decryption_map: dict, default: str, service: str) -> str:
-    """Pick the decryption tool for a service (case-insensitive), falling back to default."""
+    """Pick the decryption backend for a service (case-insensitive), falling back to default."""
     return ci_get(decryption_map, service, default)
 
 
 def resolve_cdm_name(cdm: dict, service: str, override: Any = None) -> Any:
-    """Resolve a service's top-level CDM entry (case-insensitive), with default fallback."""
+    """Find a service's top-level CDM entry (case-insensitive), with default fallback."""
     return override or ci_get(cdm, service) or ci_get(cdm, "default")
 
 
@@ -109,6 +157,8 @@ class Config:
         else:
             self.decryption_map = {}
             self.decryption = decryption_cfg or "shaka"
+        self.decrypt_segments: bool = bool(kwargs.get("decrypt_segments", False))
+        self.merge_segments: bool = bool(kwargs.get("merge_segments", False))
 
         self.theme: str = kwargs.get("theme") or "default"
         self.set_terminal_bg: bool = kwargs.get("set_terminal_bg", False)
@@ -127,9 +177,12 @@ class Config:
         self.decrypt_labs_api_key: str = kwargs.get("decrypt_labs_api_key") or ""
         self.ipinfo_api_key: str = kwargs.get("ipinfo_api_key") or ""
         self.update_checks: bool = kwargs.get("update_checks", True)
+        self.services_repo_force: bool = bool(kwargs.get("services_repo_force", False))
         self.update_check_interval: int = kwargs.get("update_check_interval", 24)
         # mask local base dirs (install root/venv/home) in logged paths; False shows full paths
         self.redact_paths: bool = kwargs.get("redact_paths", True)
+        self.continue_downloads: bool = kwargs.get("continue_downloads", False)
+        self.post_scripts: list = kwargs.get("post_scripts") or []
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
         self.tag_rules: list = kwargs.get("tag_rules") or []
@@ -147,11 +200,11 @@ class Config:
             raise SystemExit(
                 "ERROR: The 'scene_naming' option has been removed.\n"
                 "Please configure 'output_template' in your envied.yaml instead.\n"
-                "See envied-example.yaml for examples."
+                "See unshackle-example.yaml for examples."
             )
 
         if self.output_template:
-            self._validate_output_templates()
+            self.validate_output_templates()
 
         self.unicode_filenames: bool = kwargs.get("unicode_filenames", False)
 
@@ -163,7 +216,7 @@ class Config:
         self.debug_keys: bool = kwargs.get("debug_keys", False)
         self.debug_requests: bool = kwargs.get("debug_requests", False)
 
-    def _validate_output_templates(self) -> None:
+    def validate_output_templates(self) -> None:
         """Validate output template configurations and warn about potential issues."""
         if not self.output_template:
             return
@@ -211,6 +264,27 @@ class Config:
             "title_type",
         }
 
+        type_only = {
+            "series": {"season", "episode", "season_episode", "episode_name", "part", "absolute", "date"},
+            "songs": {
+                "track_number",
+                "artist",
+                "album_artist",
+                "album",
+                "disc",
+                "track_total",
+                "disc_total",
+                "release_type",
+                "genre",
+                "explicit",
+                "isrc",
+                "upc",
+                "label",
+            },
+        }
+        type_only["albums"] = type_only["songs"]
+        shared = valid_variables - set().union(*type_only.values())
+
         unsafe_chars = r'[<>:"/\\|?*]'
 
         all_templates = dict(self.output_template)
@@ -229,10 +303,14 @@ class Config:
 
             variables = re.findall(r"\{([^}]+)\}", template_str)
 
+            kind = template_type.split(".")[-1]
+            allowed = shared | type_only.get(kind, set())
             for var in variables:
                 var_clean = var.rstrip("?")
                 if var_clean not in valid_variables:
                     warnings.warn(f"Unknown template variable '{var}' in {template_type} template")
+                elif var_clean not in allowed:
+                    warnings.warn(f"Template variable '{var}' is not available in the {template_type} template")
 
             test_template = re.sub(r"\{[^}]+\}", "TEST", template_str)
             if template_type.startswith("folder"):
@@ -246,7 +324,7 @@ class Config:
                 warnings.warn(f"Template '{template_type}' is empty")
 
     def get_folder_template(self, kind: str) -> str:
-        """Resolve the folder template for the given title kind.
+        """Find the folder template for the given title kind.
 
         kind: one of "movies", "series", "songs", "albums".
         Falls back to the legacy single-string folder template, then "".
@@ -266,7 +344,7 @@ class Config:
         Args:
             template_type: One of "movies", "series", or "songs".
         """
-        template = self.output_template[template_type]
+        template = self.output_template.get(template_type) or ""
         between_vars = re.findall(r"\}([^{]*)\{", template)
         separator_text = "".join(between_vars)
         dot_count = separator_text.count(".")
@@ -280,7 +358,7 @@ class Config:
             raise FileNotFoundError(f"Config file path ({path}) was not found")
         if not path.is_file():
             raise FileNotFoundError(f"Config file path ({path}) is not to a file.")
-        return cls(**yaml.safe_load(path.read_text(encoding="utf8")) or {})
+        return cls(**restore_bool_languages(yaml.safe_load(path.read_text(encoding="utf8")) or {}))
 
 
 # noinspection PyProtectedMember

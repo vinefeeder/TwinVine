@@ -16,7 +16,7 @@ from envied.core.constants import AnyTrack
 from envied.core.credential import Credential
 from envied.core.drm import drm_from_dict
 from envied.core.manifests import DASH, HLS, ISM
-from envied.core.remote_service import RemoteService, _build_title, _match_track, _resolve_proxy
+from envied.core.remote_service import RemoteService, build_title, match_track, resolve_proxy_arg
 from envied.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
 from envied.core.tracks import Audio, Chapter, Chapters, Tracks, Video
 from envied.core.tracks.attachment import Attachment
@@ -28,7 +28,7 @@ PARSERS = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
 MANIFEST_DATA_KEYS = {"DASH": "dash", "ISM": "ism"}
 
 
-def _fallback_language(language: Any) -> Optional[Any]:
+def fallback_language(language: Any) -> Optional[Any]:
     """The title language if the parsers would accept it, else None so they raise.
 
     DASH drops an und/invalid fallback but ISM does not, and a truthy 'und' there silently
@@ -40,7 +40,7 @@ def _fallback_language(language: Any) -> Optional[Any]:
     return language
 
 
-def _resolve_import_manifest_data(
+def resolve_import_manifest_data(
     tracks: Tracks,
     manifest_type: Optional[str],
     *,
@@ -48,9 +48,9 @@ def _resolve_import_manifest_data(
     language: Any,
     title: Title_T,
 ) -> None:
-    """Populate ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
+    """Fill ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
 
-    Exports may omit ``manifest_url`` (e.g. when the service never set
+    Exports can be without ``manifest_url`` (for example, when the service never set
     ``title.tracks.manifest_url``) or carry one MPD per adaptation set. ``Track.from_dict``
     does not serialise manifest XML, so each exported track's ``url`` is re-fetched and
     matched to a locally parsed representation before download.
@@ -68,7 +68,7 @@ def _resolve_import_manifest_data(
     if not pending:
         return
 
-    fallback_lang = _fallback_language(language)
+    fallback_lang = fallback_language(language)
     for url in {str(track.url) for track in pending if track.url}:
         try:
             manifest = parser.from_url(url=url, session=session)
@@ -90,7 +90,7 @@ def _resolve_import_manifest_data(
         for track in pending:
             if track.data.get(data_key) or str(track.url) != url:
                 continue
-            matched = _match_track(track, local_tracks)
+            matched = match_track(track, local_tracks)
             if matched and matched.data.get(data_key):
                 track.data.update(matched.data)
 
@@ -98,13 +98,15 @@ def _resolve_import_manifest_data(
 class ImportService:
     """Reconstructs a download from an export JSON.
 
-    Auth and licensing are skipped; tracks are rebuilt from the export and keys injected
-    directly. ``_server_cdm``/``_server_cdm_type`` keep their underscores: dl.py reads them
-    via getattr as the server-CDM contract that skips client licensing.
+    ImportService does not authenticate and does not license. It rebuilds the tracks from
+    the export and injects the keys directly. ``_server_cdm``/``_server_cdm_type`` keep their
+    underscores: dl.py reads them through getattr as the server-CDM contract that skips
+    client licensing.
     """
 
     ALIASES: tuple[str, ...] = ()
     GEOFENCE: tuple[str, ...] = ()
+    GEOBLOCK: tuple[str, ...] = ()
     NO_SUBTITLES: bool = False
 
     def __init__(self, ctx: click.Context, service_tag: str, title: str, import_file: Optional[str]) -> None:
@@ -142,10 +144,11 @@ class ImportService:
 
     @staticmethod
     def build_session(ctx: click.Context, region: Optional[str] = None) -> requests.Session:
-        """Session for re-fetching the manifest.
+        """HTTP session for re-fetching the manifest.
 
-        Honours the importer's ``--proxy``; otherwise falls back to the export region as a
-        geofence. An explicit proxy that fails to resolve raises; a region fallback warns.
+        Honours the importer's ``--proxy``. Without one, it falls back to the export region
+        as a geofence. An explicit proxy that unshackle cannot find raises an error. A region
+        fallback gives a warning.
         """
         session = requests.Session()
         session.headers.update(config.headers)
@@ -160,7 +163,7 @@ class ImportService:
             return session
 
         try:
-            proxy = _resolve_proxy(proxy_query)
+            proxy = resolve_proxy_arg(proxy_query)
         except Exception as e:
             if explicit:
                 raise click.ClickException(f"Failed to resolve proxy '{proxy_query}': {e}")
@@ -184,7 +187,7 @@ class ImportService:
         if self.titles is not None:
             return self.titles
         titles_list = [
-            _build_title(entry.get("meta", {}), self.service_tag, fallback_id=title_id)
+            build_title(entry.get("meta", {}), self.service_tag, fallback_id=title_id)
             for title_id, entry in self.titles_data.items()
         ]
         self.titles = (
@@ -201,11 +204,11 @@ class ImportService:
         """Reconstruct the title's tracks from the export.
 
         DASH/ISM: re-fetch and re-parse ``manifest_url`` for the full ladder on that MPD (the importer
-        picks quality with normal dl flags; keys are injected by KID later), then merge in exported
+        picks quality with normal dl flags, and injects the keys by KID later), then merge in exported
         DASH/ISM tracks from other MPDs (e.g. a separate HEVC manifest) and direct-URL side-loads.
         A service side-loads its own subtitles when the manifest's are the worse copy, so any
-        direct-URL subtitle in the export means the whole re-parsed subtitle set is dropped in
-        favour of the exported one.
+        direct-URL subtitle in the export means unshackle drops the whole re-parsed subtitle
+        set in favour of the exported one.
         HLS/URL: rebuild from the stored per-track dicts, since the variant is re-fetched from
         track.url at download time and a master playlist can hand out a new token on every fetch.
         """
@@ -231,7 +234,7 @@ class ImportService:
                     f"The manifest URL may have expired since export. ({e})"
                 )
             try:
-                parsed = manifest.to_tracks(language=_fallback_language(title.language))
+                parsed = manifest.to_tracks(language=fallback_language(title.language))
             except ValueError as e:
                 if "Language information could not be derived" in str(e):
                     raise click.ClickException(
@@ -275,7 +278,7 @@ class ImportService:
                 track.drm = drm
             tracks.add(track, warn_only=True)
 
-        _resolve_import_manifest_data(
+        resolve_import_manifest_data(
             tracks,
             manifest_type,
             session=self.session,
@@ -303,10 +306,11 @@ class ImportService:
         self.tracks_by_title[title_id] = tracks
         return tracks
 
-    def key_pool(self) -> dict[UUID, str]:
-        """All exported KID:KEY pairs across every title, as {UUID: key_hex}."""
+    def key_pool(self, title_id: Optional[str] = None) -> dict[UUID, str]:
+        """Exported KID:KEY pairs as {UUID: key_hex}, for one title or across every title."""
         pool: dict[UUID, str] = {}
-        for entry in self.titles_data.values():
+        entries = [self.titles_data.get(title_id, {})] if title_id else self.titles_data.values()
+        for entry in entries:
             for track_dict in (entry.get("tracks") or {}).values():
                 for kid_hex, key in (track_dict.get("keys") or {}).items():
                     pool[UUID(hex=kid_hex)] = key
@@ -328,7 +332,7 @@ class ImportService:
 
         if drm_obj is None and keys:
             drm_type = (drm_dicts[0].get("system", "Widevine").lower()) if drm_dicts else "widevine"
-            drm_obj = RemoteService._create_drm_stub(drm_type, list(keys.keys()))
+            drm_obj = RemoteService.create_drm_stub(drm_type, list(keys.keys()))
 
         if drm_obj is None:
             return None
@@ -340,11 +344,12 @@ class ImportService:
     def resolve_server_keys(self, title: Title_T) -> None:
         """Inject exported keys into the selected encrypted tracks by KID (no network).
 
-        Called by dl.py after selection. Only encrypted video/audio are touched; encrypted
-        DASH tracks (no DRM at parse time) get a stub holding the keys, which
-        DASH.download_track preserves. decrypt() applies the key whose KID matches the media.
+        dl.py calls this method after selection. It touches only encrypted video and audio
+        tracks. Encrypted DASH tracks (no DRM at parse time) get a stub holding the keys,
+        which DASH.download_track preserves. decrypt() applies the content key whose KID
+        matches the media.
         """
-        pool = self.key_pool()
+        pool = self.key_pool(str(title.id)) or self.key_pool()
         if not pool:
             return
 
@@ -352,21 +357,23 @@ class ImportService:
         kid_hexes = [kid.hex for kid in pool]
 
         for track in title.tracks:
-            if not isinstance(track, (Video, Audio)) or not self.track_is_encrypted(track):
+            if not isinstance(track, (Video, Audio)) or not self.track_is_encrypted(track, self.session):
                 continue
-            drm_obj = track.drm[0] if track.drm else RemoteService._create_drm_stub(system, kid_hexes)
+            drm_obj = track.drm[0] if track.drm else RemoteService.create_drm_stub(system, kid_hexes)
             for kid, key in pool.items():
                 drm_obj.content_keys[kid] = key
             track.drm = [drm_obj]
             self._server_cdm_type = drm_obj.__class__.__name__.lower()
 
     @staticmethod
-    def track_is_encrypted(track: Any) -> bool:
-        """True if the track carries DRM or its manifest declares protection.
+    def track_is_encrypted(track: Any, session: Optional[requests.Session] = None) -> bool:
+        """True if the track carries DRM, its manifest declares protection, or its init segment does.
 
-        ISM is checked as well as DASH because ISM.download_track reads only ``track.drm``. A rung
-        that misses key injection here downloads encrypted and muxes without error. DASH re-derives
-        its DRM from the manifest elements, so it survives the same omission.
+        This method examines ISM as well as DASH, because ISM.download_track reads only
+        ``track.drm``. A rung that misses content key injection here downloads encrypted and
+        muxes without error. A DASH manifest with no ContentProtection can still describe an
+        encrypted track, with the PSSH only in the init segment, so that case probes the init
+        segment with `session`.
         """
         if track.drm:
             return True
@@ -376,6 +383,10 @@ class ImportService:
             for element in (dash.get("representation"), dash.get("adaptation_set")):
                 if element is not None and element.findall("ContentProtection"):
                     return True
+            from envied.core.api.handlers import drm_from_init_segment
+
+            if drm_from_init_segment(track, session):
+                return True
         ism = data.get("ism")
         if ism:
             manifest = ism.get("manifest")
