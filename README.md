@@ -15,10 +15,10 @@ Envied is forked from unshackle github.com/unshackle-dl/unshackle and I thank th
   
 * This release has taken a snapshot of the unshackle dev branch at 24/09/2026. It has many new features and since a full unshackle release is unforthcoming, this update will prevent envied falling too far behind.
 
-* Services will now fully remote.
+* Services are now fully remote.
 At first envied-run, services will be downloaded automatically. They are volatile and will renewed next time envied is run. 
 
-* If you get any service errors, be sure to remove packages/envied/src/envied/services/_repos and restart envied.
+* If you get any service errors,Tw be sure to remove packages/envied/src/envied/services/_repos and restart envied.
    
 * PRDs: A playready prd is available. Set which services you wish to use it in envied.yaml - see under cdm. ITV is currently set to use playready  
 
