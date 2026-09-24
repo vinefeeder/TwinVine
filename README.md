@@ -16,7 +16,7 @@ Envied is forked from unshackle github.com/unshackle-dl/unshackle and I thank th
 * This release has taken a snapshot of the unshackle dev branch at 24/09/2026. It has many new features and since a full unshackle release is unforthcoming, this update will prevent envied falling too far behind.
 
 * Services are now fully remote.
-At first envied-run, services will be downloaded automatically. They are volatile and will renewed next time envied is run. 
+At first envied-run, services will be downloaded automatically. They are volatile and will renewed each time envied is run. 
 
 * If you get any service errors,Tw be sure to remove packages/envied/src/envied/services/_repos and restart envied.
    
