@@ -667,7 +667,7 @@ wheels = [
 
 [[package]]
 name = "envied"
-version = "5.4.0"
+version = "5.5.0"
 source = { editable = "packages/envied" }
 dependencies = [
     { name = "aiohttp" },

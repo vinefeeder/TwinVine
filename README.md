@@ -38,8 +38,8 @@ TwinVine runs through the Python package manager `uv`.
 ### Run the main tools
 
 ```bash
-uv run vinefeeder
 uv run envied dl --select-titles <service> <url>
+uv run vinefeeder
 ```
 
 ### Access envied from the GUI
@@ -115,9 +115,9 @@ cd TwinVine
 uv lock
 uv sync
 cp ./packages/envied/src/envied/envied-working-example.yaml ./packages/envied/src/envied/envied.yaml
-uv run vinefeeder --help
 uv run envied --help
 uv run envied dl -?
+uv run vinefeeder --help
 ```
 
 ## Locations
