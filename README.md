@@ -13,10 +13,10 @@ Envied is forked from unshackle github.com/unshackle-dl/unshackle and I thank th
 
 ## Take Note  
   
-* This release has taken a snapshot of the unshackle dev branch at 24/09/2026. It has many new features and since a full unshackle release is unforthcoming, this update will prevent envied falling too far behind.
+* This release has taken a snapshot of the unshackle dev branch, version 5.5.0, at 24/09/2026. It has many new features and since a full unshackle release is unforthcoming, this update will prevent envied falling too far behind.
 
 * Services are now fully remote.
-At first envied-run, services will be downloaded automatically. They are volatile and will renewed each time envied is run. 
+At first envied-run, services will be downloaded automatically.
 
 * If you get any service errors, be sure to remove packages/envied/src/envied/services/_repos and restart envied.
    
@@ -164,39 +164,10 @@ Vinefeeder currently supports search, browse, and list-select for these services
 ### Envied services
 
 Envied supports a broader set of direct-download services:
+Presently a configured _repo contains 69 services and you may add any you find to the
+packages/envied/src/envied/services/ folder 
 
-- ALL4
-- AUBC
-- CBS
-- CWTV
-- DSCP
-- iP
-- MAX
-- MY5
-- NF
-- PCOK
-- PLEX
-- RTE
-- ROKU
-- SPOT
-- TPTV
-- TVNZ
-- YTBE
-- ARD
-- CBC
-- CTV
-- DSNP
-- ITV
-- MTSP
-- NBLA
-- NRK
-- PLUTO
-- STV
-- TUBI
-- UKTV
-- ZDF
-
-These services have web origins and not all have been tested.
+Services have web origins and not all have been tested. None are in my remit to support!
 
 ## You can use AI to create your own Vinefeeder service!!
 
