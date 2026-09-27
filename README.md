@@ -27,7 +27,7 @@ At first envied-run, services will be downloaded automatically.
 ## Key workflows
 
 - Use `envied` when you already have an exact program URL.
-- Use `vinefeeder` search when you only know a program name.
+- Use `vinefeeder` search when you only use a program name and select responses from a GUI
 - Use the browse feature when you want to explore categories like Film, Drama, or Sport.
 - Use Batch Mode to select and download multiple items from several services.
 
@@ -161,11 +161,21 @@ Vinefeeder currently supports search, browse, and list-select for these services
 - TVNZ
 - U
 
-### Envied services
+### Envied services may now be remote services.
 
-Envied supports a broader set of direct-download services:
-Presently a configured _repo contains 69 services and you may add any you find to the
-packages/envied/src/envied/services/ folder 
+Envied supports a broader set of direct-download services some local and some on a distant server:
+- Presently a configured server _repo contains 69 services.
+- You may add any service you find to the packages/envied/src/envied/services/ folder. And because that folder
+   is listed first in envied.yaml - -the cofiguration file - services there will be loaded first. The distant _repo is next to load. If it contains duplicate service names, the duplicate is ignored.
+   By choosing location order for services you are able to choose which service loads and which remains a duplicate. See https://forum.videohelp.com/threads/418705-Unshackle-Modular-Movie-TV-and-Music-Archival-Software/page43#post2804257  for more details.
+
+- Extra services provided in python and C compiled code are available.
+   currently YT and DSNP are treated this way by one very repressive developer.
+   - ./packages/envied/src/envied/extraSevices/python311/ 
+   - ./packages/envied/src/envied/extraSevices/python313/ 
+   - ./packages/envied/src/envied/extraSevices/python314/
+   be sure to use the python that matches your system's Python otherwise additon may prevent scripts parsing. 
+   Note: python311 includes python312 code to 
 
 Services have web origins and not all have been tested. None are in my remit to support!
 

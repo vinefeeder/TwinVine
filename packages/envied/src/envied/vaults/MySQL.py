@@ -5,7 +5,6 @@ from uuid import UUID
 import pymysql
 from pymysql.cursors import DictCursor
 
-from envied.core.services import Services
 from envied.core.vault import Vault
 
 
@@ -164,6 +163,9 @@ class MySQL(Vault):
             cursor.close()
 
     def get_services(self) -> Iterator[str]:
+        # Service discovery can import Vaults, so defer it until the vault is in use.
+        from envied.core.services import Services
+
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
