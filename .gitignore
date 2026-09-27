@@ -16,14 +16,10 @@ key_store.db-wal
 key_store.db
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[codz]
-*$py.class
 
-# C extensions
-*.so
 
 # Distribution / packaging
-.Python
+#.Python
 build/
 develop-eggs/
 dist/
@@ -62,7 +58,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.py.cover
+*#.py.cover
 .hypothesis/
 .pytest_cache/
 cover/
