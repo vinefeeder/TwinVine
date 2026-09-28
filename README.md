@@ -138,6 +138,17 @@ WVD files are stored in `TwinVine/WVDs/`, such as `device.wvd`.
 
 Vaults are not configured locally by default. TwinVine uses a remote vault for caching and license retrieval and may display `DRMLab` as the license source.
 
+## Extras for both Windows and Linux
+Binaries as installed above with installation scripts will provide 
+  ![TwinVine GUI](https://github.com/vinefeeder/TwinVine/blob/main/images/progs.png)
+
+Hola-proxy is an extra if you will be downloading from other countries. A binary may be downloaded from
+https://github.com/snawoot-proxies-forks/hola-proxy/releases/tag/v1.18.2-fork
+Be sure to select the version for your system  (x64 systems will use arm64). download and rename hola-proxy;
+place it in the binaries folder or on your system's PATH.
+
+
+
 ## Linux note
 
 Linux terminals can sometimes freeze after `envied` completes a download. If that happens, ensure `TERMINAL_RESET: True` is set in:
