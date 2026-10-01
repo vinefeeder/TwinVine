@@ -144,9 +144,8 @@ Binaries as installed above with installation scripts will provide
 
 Hola-proxy is an extra if you will be downloading from other countries. A binary may be downloaded from
 https://github.com/snawoot-proxies-forks/hola-proxy/releases/tag/v1.18.2-fork
-Be sure to select the version for your system  (x64 systems will use arm64). download and rename hola-proxy;
+Be sure to select the version for your system  (x64 systems will use amd64). download and rename hola-proxy;
 place it in the binaries folder or on your system's PATH.
-
 
 
 ## Linux note
