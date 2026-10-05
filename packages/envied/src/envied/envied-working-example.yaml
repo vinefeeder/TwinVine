@@ -124,6 +124,7 @@ cdm:
   ITV: playready
   DSNP: playready
   NF: playready
+  HMAX: playready
 
 
 # Key Vaults store your obtained Content Encryption Keys (CEKs)
