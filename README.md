@@ -13,7 +13,7 @@ Envied is forked from unshackle github.com/unshackle-dl/unshackle and I thank th
 
 ## Take Note  
   
-* This release has taken a snapshot of the unshackle dev branch, version 5.5.0, at 24/09/2026. It has many new features and since a full unshackle release is unforthcoming, this update will prevent envied falling too far behind.
+* This release has taken a snapshot of the unshackle dev branch, version 6.0.0, at 14/10/2026. It has many new features and since a full unshackle release is unforthcoming, this update will prevent envied falling too far behind.
 
 * Services are now fully remote.
 At first envied-run, services will be downloaded automatically.
