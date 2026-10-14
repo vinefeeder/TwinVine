@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from unshackle.core.titles.music import Song
+    from envied.core.titles.music import Song
 
 
 @dataclass
