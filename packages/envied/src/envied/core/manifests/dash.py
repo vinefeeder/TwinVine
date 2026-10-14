@@ -19,7 +19,7 @@ from zlib import crc32
 
 import requests
 from langcodes import Language, tag_is_valid
-from lxml.etree import Element, ElementTree
+from lxml.etree import Element, ElementTree, XMLSyntaxError
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
@@ -27,14 +27,18 @@ from requests import Session
 
 from envied.core import binaries
 from envied.core.config import config
-from envied.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
+from envied.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from envied.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from envied.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from envied.core.drm.verify import decrypt_track
 from envied.core.events import events
 from envied.core.session import RnetSession
 from envied.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
-from envied.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
+from envied.core.tracks.track import (
+    DRM_PREFERENCE_TYPES,
+    assert_fragments_decrypted,
+    parse_sidx,
+)
 from envied.core.utilities import is_close_match, log_event, try_ensure_utf8
 from envied.core.utils.redact import safe_display_url
 from envied.core.utils.xml import load_xml
@@ -75,7 +79,7 @@ class RollingMerge:
         self.ready: dict[int, tuple[Path, Optional[Future]]] = {}
 
     def add(self, index: int, segment_file: Path, future: Optional[Future] = None) -> None:
-        # ponytail: runs on the downloader's own loop, so a decrypt wait or a catch-up burst
+        # runs on the downloader's own loop, so a decrypt wait or a catch-up burst
         # delays new submissions; move the drain to a writer thread if throughput measurably drops
         self.ready[index] = (segment_file, future)
         while self.cursor in self.ready:
@@ -114,6 +118,7 @@ class DASH:
 
     @classmethod
     def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **args: Any) -> DASH:
+        """Fetch and parse an MPD. The XML declaration gives the encoding, then the HTTP charset."""
         if not url:
             raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
@@ -134,11 +139,15 @@ class DASH:
         log_event(
             "manifest_dash_fetch",
             level="DEBUG",
-            message=f"Fetched DASH manifest ({len(res.text)} bytes)",
-            context={"url": safe_display_url(url), "size": len(res.text)},
+            message=f"Fetched DASH manifest ({len(res.content)} bytes)",
+            context={"url": safe_display_url(url), "size": len(res.content)},
         )
 
-        return DASH.from_text(res.text, url)
+        try:
+            return cls(load_xml(res.content), url)
+        except XMLSyntaxError:
+            # no declaration and not UTF-8: only the HTTP charset can name the encoding
+            return cls.from_text(res.text, url)
 
     @classmethod
     def from_text(cls, text: str, url: str) -> DASH:
@@ -395,8 +404,13 @@ class DASH:
             track.drm = manifest_drm
         else:
             track.drm = existing_drm
+            if DOWNLOAD_ALL_DRM.is_set():
+                track.drm = [
+                    *existing_drm,
+                    *(d for d in manifest_drm if not any(type(d) is type(e) for e in existing_drm)),
+                ]
 
-        if track.drm and track.drm_preference:
+        if track.drm and track.drm_preference and not DOWNLOAD_ALL_DRM.is_set():
             wanted = DRM_PREFERENCE_TYPES[track.drm_preference]
             preferred = [drm_obj for drm_obj in track.drm if isinstance(drm_obj, wanted)]
             if preferred:
@@ -453,6 +467,7 @@ class DASH:
                 track_url=track.url,
                 session=session,
                 probe_kid=period_idx == 0,
+                window=config.sample,
             )
 
             if period_idx == 0:
@@ -466,10 +481,18 @@ class DASH:
                     seen_segments.add(seg)
                     segments.append(seg)
             segment_durations.extend(p_durations)
+            # ponytail: a sample comes from the first content period only; map the window across
+            # periods if a manifest with a short first period needs it
+            if config.sample and segments:
+                break
 
         if not segments:
             log.error("Could not find a way to get segments from this MPD manifest.")
             log.debug(track.url)
+            sys.exit(1)
+
+        if config.sample and not segment_durations and not isinstance(track, Subtitle):
+            log.error("--sample cannot cut this track: the manifest gives it as one file with no segment index.")
             sys.exit(1)
 
         # TODO: Should we floor/ceil/round, or is int() ok?
@@ -478,6 +501,8 @@ class DASH:
 
         if not track.drm and init_data and isinstance(track, (Video, Audio)) and not binaries.FFProbe:
             log.warning("FFprobe was not found, so the init segment was not probed for a PSSH.")
+        elif DOWNLOAD_ALL_DRM.is_set() and init_data and binaries.FFProbe and isinstance(track, (Video, Audio)):
+            track.add_init_drm(init_data, cdm)
         elif not track.drm and init_data and isinstance(track, (Video, Audio)):
             prefers_playready = track.prefers_playready(cdm)
             if prefers_playready:
@@ -526,7 +551,7 @@ class DASH:
         # When every segment is a byte range of one parent resource and init is its [0, len)
         # prefix, the whole resource is itself a valid MP4, so one direct download to save_path
         # replaces the per-segment files, init write and merge pass.
-        collapse_single_url = DASH.collapsible_single_url(
+        collapse_single_url = not config.sample and DASH.collapsible_single_url(
             isinstance(track, Subtitle),
             segments,
             len(init_data) if init_data is not None else None,
@@ -747,6 +772,26 @@ class DASH:
         progress(downloaded="Downloaded")
 
     @staticmethod
+    def find_segment_element(name: str, adaptation_set: Element, representation: Element) -> Optional[Element]:
+        """Find a segment description element on the representation, or else on its adaptation set."""
+        element = representation.find(name)
+        return element if element is not None else adaptation_set.find(name)
+
+    @staticmethod
+    def has_segment_timing(track: AnyTrack) -> bool:
+        """Return False when the manifest gives the track as one file with no index, so a sample cannot cut it."""
+        dash = track.data.get("dash") or {}
+        representation, adaptation_set = dash.get("representation"), dash.get("adaptation_set")
+        if representation is None or adaptation_set is None:
+            return True
+        segment_base = DASH.find_segment_element("SegmentBase", adaptation_set, representation)
+        return (
+            DASH.merge_segment_templates(adaptation_set, representation) is not None
+            or DASH.find_segment_element("SegmentList", adaptation_set, representation) is not None
+            or (segment_base is not None and bool(segment_base.get("indexRange")))
+        )
+
+    @staticmethod
     def collapsible_single_url(
         is_subtitle: bool,
         segments: list[tuple[str, Optional[str]]],
@@ -837,6 +882,7 @@ class DASH:
         track_url: str,
         session: Union[Session, RnetSession],
         probe_kid: bool = True,
+        window: Optional[tuple[int, int]] = None,
     ) -> tuple[
         Optional[bytes],
         list[tuple[str, Optional[str]]],
@@ -870,13 +916,9 @@ class DASH:
 
         segment_template = DASH.merge_segment_templates(adaptation_set, representation)
 
-        segment_list = representation.find("SegmentList")
-        if segment_list is None:
-            segment_list = adaptation_set.find("SegmentList")
+        segment_list = DASH.find_segment_element("SegmentList", adaptation_set, representation)
 
-        segment_base = representation.find("SegmentBase")
-        if segment_base is None:
-            segment_base = adaptation_set.find("SegmentBase")
+        segment_base = DASH.find_segment_element("SegmentBase", adaptation_set, representation)
 
         segments: list[tuple[str, Optional[str]]] = []
         segment_timescale: float = 0
@@ -923,6 +965,10 @@ class DASH:
                         segment_durations.append(current_time)
                         current_time += int(s.get("d"))
 
+                keep = track.sample_slice(segment_durations, segment_timescale, window) if window else slice(None)
+                start_number += keep.start or 0
+                segment_durations = segment_durations[keep]
+
                 if not end_number:
                     end_number = start_number + len(segment_durations) - 1
 
@@ -949,7 +995,11 @@ class DASH:
                     segment_count = math.ceil(period_duration / (segment_duration / segment_timescale))
                     end_number = start_number + segment_count - 1
 
-                for s in range(start_number, end_number + 1):
+                numbers = range(start_number, end_number + 1)
+                if window:
+                    starts = [n * segment_duration for n in range(len(numbers))]
+                    numbers = numbers[track.sample_slice(starts, segment_timescale, window)]
+                for s in numbers:
                     segments.append(
                         (
                             DASH.replace_fields(
@@ -987,6 +1037,10 @@ class DASH:
                 track_kid = track.get_key_id(init_data)
 
             segment_urls = segment_list.findall("SegmentURL")
+            list_duration = float(segment_list.get("duration") or 0)
+            if window and list_duration:
+                starts = [n * list_duration for n in range(len(segment_urls))]
+                segment_urls = segment_urls[track.sample_slice(starts, segment_timescale, window)]
             for segment_url in segment_urls:
                 media_url = segment_url.get("media")
                 if not media_url:
@@ -1015,15 +1069,24 @@ class DASH:
                 if total_size:
                     media_range = f"{len(init_data)}-{total_size}"
 
-            segments.append((rep_base_url, media_range))
+            subsegments: list[tuple[int, int, int]] = []
+            index_range = segment_base.get("indexRange")
+            if window and index_range and not isinstance(track, Subtitle):
+                res = session.get(url=rep_base_url, headers={"Range": f"bytes={index_range}"})
+                res.raise_for_status()
+                segment_timescale, subsegments = parse_sidx(res.content, int(index_range.split("-")[0]))
+
+            if subsegments:
+                segment_durations = [time for time, _, _ in subsegments]
+                keep = track.sample_slice(segment_durations, segment_timescale, window)
+                segment_durations = segment_durations[keep]
+                segments.extend((rep_base_url, f"{first}-{last}") for _, first, last in subsegments[keep])
+            else:
+                segments.append((rep_base_url, media_range))
         elif rep_base_url:
             segments.append((rep_base_url, None))
 
         return init_data, segments, segment_timescale, segment_durations, track_kid
-
-    # Deprecated 5.5.0 shims for service repos still on the old underscored names; drop once they migrate.
-    _is_content_period = is_content_period
-    _get_period_segments = get_period_segments
 
     @staticmethod
     def get_attr(item: str, adaptation_set: Element, representation: Optional[Element] = None) -> Optional[Any]:
@@ -1202,7 +1265,7 @@ class DASH:
                 ("urn:mpeg:dash:role:2011", "descriptive"),
                 ("urn:tva:metadata:cs:AudioPurposeCS:2007", "1"),
             )
-            for x in adaptation_set.findall("Accessibility")
+            for x in (*adaptation_set.findall("Accessibility"), *adaptation_set.findall("Role"))
         )
 
     @staticmethod

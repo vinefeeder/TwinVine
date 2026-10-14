@@ -1,10 +1,11 @@
 import logging
+import time
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 
 if TYPE_CHECKING:
     from envied.core.api.input_bridge import InputBridge
@@ -18,11 +19,12 @@ from rich.rule import Rule
 
 from envied.core.cacher import Cacher
 from envied.core.config import config
-from envied.core.console import console, prompt_user
+from envied.core.console import console, prompt_user, show_notice
 from envied.core.constants import AnyTrack
 from envied.core.credential import Credential
 from envied.core.drm import DRM_T
 from envied.core.proxies.basic import Basic
+from envied.core.proxies.resolve import find_provider
 from envied.core.search_result import SearchResult
 from envied.core.session import (
     BACKOFF_FACTOR,
@@ -139,6 +141,9 @@ def sanitize_proxy_for_log(uri: Optional[str], mask_host: bool = False) -> Optio
     return mask_proxy(uri, mask_host=mask_host, allow_debug=False)
 
 
+T = TypeVar("T")
+
+
 class Service(metaclass=ABCMeta):
     """The Service Base Class.
 
@@ -153,11 +158,18 @@ class Service(metaclass=ABCMeta):
     GEOBLOCK: tuple[str, ...] = ()  # ip regions where the service refuses to work; everything else is allowed.
     ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
     DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
+    ANONYMOUS_SEARCH: bool = False  # search() needs no login; a search then skips cookies and authenticate().
     # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
     VAULT_TAG: Optional[str] = None
     # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
     # endpoint infers them from authenticate().
     AUTH_METHODS: Optional[tuple[str, ...]] = None
+    # Config keys a remote client may supply for a session its own device licenses (a device identity
+    # such as an ESN); the server's own values for these keys are withheld from that session.
+    CLIENT_CONFIG: tuple[str, ...] = ()
+    # Every service option that makes the service call ``cdm.lend_server_device()``. A remote session with
+    # one of them set keeps the server CDM even when the remote client picked its own device.
+    SERVER_DEVICE_OPTIONS: tuple[str, ...] = ()
 
     def __init__(self, ctx: click.Context):
         console.print(Padding(Rule(f"[rule.text]Service: {self.__class__.__name__}"), (1, 2)))
@@ -214,10 +226,10 @@ class Service(metaclass=ABCMeta):
                     )
                     if proxy_provider_name:
                         # Specific provider requested
-                        proxy_provider = next(
-                            (x for x in ctx.obj.proxy_providers if x.__class__.__name__.lower() == proxy_provider_name),
-                            None,
-                        )
+                        try:
+                            proxy_provider = find_provider(ctx.obj.proxy_providers, proxy_provider_name)
+                        except ValueError:
+                            proxy_provider = None
                         if proxy_provider:
                             mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
                             if mapped_proxy_uri:
@@ -394,9 +406,6 @@ class Service(metaclass=ABCMeta):
 
         return all_tracks
 
-    # Deprecated 5.5.0 shim for service repos still on the old underscored name; drop once they migrate.
-    _get_tracks_for_variants = get_tracks_for_variants
-
     @staticmethod
     def get_session() -> requests.Session:
         """
@@ -422,6 +431,7 @@ class Service(metaclass=ABCMeta):
                     status_forcelist=STATUS_FORCELIST,
                     allowed_methods=RETRY_METHODS,
                     respect_retry_after_header=True,
+                    retry_after_max=MAX_BACKOFF,
                 ),
                 pool_connections=POOL_MAX_SIZE,
                 pool_maxsize=POOL_MAX_SIZE,
@@ -445,7 +455,8 @@ class Service(metaclass=ABCMeta):
 
         This is effectively a login() function. Any API calls or object initializations
         needing to be made, should be made here. unshackle operates this method before
-        any of the following abstract functions.
+        any of the following abstract functions. The one exception is a search on a
+        Service that sets ``ANONYMOUS_SEARCH``, which does not operate this method.
 
         You should avoid storing or using the Credential outside this function.
         Make any calls you need for any Cookies, Tokens, or such, then use those.
@@ -464,14 +475,39 @@ class Service(metaclass=ABCMeta):
     def request_input(self, prompt: str) -> str:
         """Request interactive input from the user.
 
-        When running locally (CLI), prompts through the shared rich console so the
-        prompt renders correctly alongside Live progress / log handlers.
-        When running in serve mode with an :class:`InputBridge` attached,
-        delegates to the bridge which relays the prompt to the remote client.
+        Locally, prompts through the shared rich console so the prompt renders alongside
+        Live progress. A remote-dl session relays it through its :class:`InputBridge`, and a
+        REST download job relays it through ``prompt_user`` to the job's ``input_prompt``.
         """
         if self._input_bridge is not None:
             return self._input_bridge.request_input(prompt)
         return prompt_user(prompt)
+
+    def wait_for_approval(
+        self, message: str, check: Callable[[], Optional[T]], timeout: float, interval: float = 3.0
+    ) -> T:
+        """Show ``message``, then call ``check`` until it returns a value.
+
+        Use it for a login that the user approves on another device, such as a pair code.
+        ``check`` returns None while the approval is pending, and must return within a few
+        seconds. Raises TimeoutError after ``timeout`` seconds, and RuntimeError when the
+        remote session no longer exists. A REST download job shows ``message`` as its ``notice``.
+        """
+        self.log.info(message)
+        show_notice(message)
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                if self._input_bridge is not None:
+                    self._input_bridge.ensure_active()
+                result = check()
+                if result is not None:
+                    return result
+                if time.monotonic() + interval >= deadline:
+                    raise TimeoutError(f"No approval within {timeout:.0f}s")
+                time.sleep(interval)
+        finally:
+            show_notice(None)
 
     def search(self) -> Generator[SearchResult, None, None]:
         """

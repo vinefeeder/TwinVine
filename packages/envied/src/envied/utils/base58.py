@@ -1,15 +1,9 @@
 # Clone from https://github.com/keis/base58
-
 """Base58 encoding
 
 Implementations of Base58 and Base58Check encodings that are compatible
 with the bitcoin network.
 """
-
-# This module is based upon base58 snippets found scattered over many bitcoin
-# tools written in python. From what I gather the original source is from a
-# forum post by Gavin Andresen, so direct your praise to him.
-# This module adds shiny packaging and support for python3.
 
 from functools import lru_cache
 from hashlib import sha256
@@ -17,7 +11,6 @@ from typing import Mapping, Union
 
 __version__ = "2.1.1"
 
-# 58 character alphabet used
 BITCOIN_ALPHABET = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 RIPPLE_ALPHABET = b"rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"
 XRP_ALPHABET = RIPPLE_ALPHABET
@@ -64,7 +57,7 @@ def b58encode(v: Union[str, bytes], alphabet: bytes = BITCOIN_ALPHABET) -> bytes
 
 
 @lru_cache()
-def _get_base58_decode_map(alphabet: bytes, autofix: bool) -> Mapping[int, int]:
+def get_base58_decode_map(alphabet: bytes, autofix: bool) -> Mapping[int, int]:
     invmap = {char: index for index, char in enumerate(alphabet)}
 
     if autofix:
@@ -86,7 +79,7 @@ def b58decode_int(v: Union[str, bytes], alphabet: bytes = BITCOIN_ALPHABET, *, a
         v = v.rstrip()
     v = scrub_input(v)
 
-    map = _get_base58_decode_map(alphabet, autofix=autofix)
+    map = get_base58_decode_map(alphabet, autofix=autofix)
 
     decimal = 0
     base = len(alphabet)

@@ -27,7 +27,13 @@ class MockCertificateChain:
 class Key:
     """`Key` object compatible with pywidevine."""
 
-    def __init__(self, kid: str, key: str, type_: str = "CONTENT"):
+    def __init__(
+        self,
+        kid: Union[str, UUID],
+        key: Union[str, bytes],
+        type_: str = "CONTENT",
+        permissions: Optional[List[str]] = None,
+    ):
         if isinstance(kid, str):
             clean_kid = kid.replace("-", "")
             if len(clean_kid) == 32:
@@ -43,6 +49,7 @@ class Key:
             self.key = key
 
         self.type = type_
+        self.permissions = permissions or []
 
 
 class CustomRemoteCDMExceptions:
@@ -641,7 +648,14 @@ class CustomRemoteCDM:
                     key_type = key_obj.get(key_fields.get("type", "type"), "CONTENT")
 
                     if kid and key:
-                        keys.append({"kid": str(kid), "key": str(key), "type": str(key_type)})
+                        keys.append(
+                            {
+                                "kid": str(kid),
+                                "key": str(key),
+                                "type": str(key_type),
+                                "permissions": key_obj.get("permissions", []),
+                            }
+                        )
 
         elif isinstance(keys_data, str):
             keys = self.apply_transform(keys_data, "parse_key_string")
@@ -779,8 +793,6 @@ class CustomRemoteCDM:
             InvalidSession: If session ID is invalid
             requests.RequestException: If API request fails
         """
-        _ = license_type, privacy_mode
-
         if session_id not in self._sessions:
             raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
 
@@ -818,6 +830,8 @@ class CustomRemoteCDM:
         base_params = {
             "scheme": self.device_name,
             "init_data": init_data,
+            "license_type": license_type,
+            "privacy_mode": privacy_mode,
         }
 
         if self.service_name:
@@ -926,7 +940,7 @@ class CustomRemoteCDM:
             raise ValueError("No challenge available - call get_license_challenge first")
 
         if isinstance(license_message, str):
-            if self.is_playready and license_message.strip().startswith("<?xml"):
+            if self.is_playready and license_message.lstrip().startswith("<"):
                 license_message = license_message.encode("utf-8")
             else:
                 try:
@@ -974,7 +988,7 @@ class CustomRemoteCDM:
         if "vault_keys" in session:
             all_keys.extend(session["vault_keys"])
 
-        if "cached_keys" in session:
+        if session.get("cached_keys"):
             all_keys.extend(session["cached_keys"])
 
         for license_key in license_keys:
@@ -1028,7 +1042,25 @@ class CustomRemoteCDM:
             raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
 
         key_dicts = self._sessions[session_id]["keys"]
-        keys = [Key(kid=k["kid"], key=k["key"], type_=k["type"]) for k in key_dicts]
+        keys = []
+        for k in key_dicts:
+            kid_val = k["kid"]
+            if isinstance(kid_val, str):
+                clean_kid = kid_val.replace("-", "")
+                kid_obj = UUID(hex=clean_kid) if len(clean_kid) == 32 else UUID(hex=clean_kid.ljust(32, "0"))
+            else:
+                kid_obj = kid_val
+
+            key_bytes = bytes.fromhex(k["key"].replace(":", "")) if isinstance(k["key"], str) else k["key"]
+
+            keys.append(
+                Key(
+                    type_=k.get("type", "CONTENT"),
+                    kid=kid_obj,
+                    key=key_bytes,
+                    permissions=k.get("permissions", []),
+                )
+            )
 
         if type_:
             keys = [key for key in keys if key.type == type_]

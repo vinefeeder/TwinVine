@@ -1,6 +1,9 @@
+import codecs
+import io
 import logging
 import math
 import shutil
+import sys
 from datetime import datetime
 from types import ModuleType
 from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
@@ -402,6 +405,15 @@ class _GradientPulse:
         return Measurement(4, self.width or options.max_width)
 
 
+def force_utf8_streams() -> None:
+    """Make stdout and stderr write UTF-8. A redirected stream on Windows uses a legacy code page that cannot encode the console output."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper) and codecs.lookup(stream.encoding).name != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+force_utf8_streams()
+
 console = ComfyConsole(
     log_time=False,
     log_path=False,
@@ -459,12 +471,38 @@ def print_wide(renderable: RenderableType, pad: PaddingDimensions = (1, 3)) -> N
         console.width = fixed_width
 
 
+_prompt_handler: Optional[Callable[[str], str]] = None
+
+
+def set_prompt_handler(handler: Optional[Callable[[str], str]]) -> None:
+    """Route every :func:`prompt_user` call to *handler*, for a process with no terminal to prompt on."""
+    global _prompt_handler
+    _prompt_handler = handler
+
+
 def prompt_user(prompt: str) -> str:
     """Ask the user for input on the shared console, themed and indented like the rest of the output."""
+    if _prompt_handler is not None:
+        return _prompt_handler(prompt)
     indent = " " * 5
     body = Text(indent + prompt.rstrip("\n ").replace("\n", "\n" + indent), style="text")
     body.append("\n" + indent + "> ", style="rule.text")
     return console.input(body)
+
+
+_notice_handler: Optional[Callable[[Optional[str]], None]] = None
+
+
+def set_notice_handler(handler: Optional[Callable[[Optional[str]], None]]) -> None:
+    """Route every :func:`show_notice` call to *handler*, for a process whose log output no user reads."""
+    global _notice_handler
+    _notice_handler = handler
+
+
+def show_notice(message: Optional[str]) -> None:
+    """Give *message* to the notice handler, or None to clear it. Without a handler this does nothing."""
+    if _notice_handler is not None:
+        _notice_handler(message)
 
 
 __all__ = (
@@ -478,4 +516,7 @@ __all__ = (
     "listing_table",
     "print_wide",
     "prompt_user",
+    "set_notice_handler",
+    "set_prompt_handler",
+    "show_notice",
 )

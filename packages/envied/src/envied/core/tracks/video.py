@@ -20,6 +20,8 @@ from envied.core.utils.subprocess import log_tool_run
 
 
 class Video(Track):
+    sample_tail = 1
+
     class Codec(str, Enum):
         AVC = "H.264"
         HEVC = "H.265"
@@ -392,6 +394,8 @@ class Video(Track):
                 original_path,
                 "-codec",
                 "copy",
+                "-strict",
+                "unofficial",
                 "-bsf:v",
                 f"{filter_key}=video_full_range_flag={range_}",
                 str(output_path),
@@ -503,6 +507,8 @@ class Video(Track):
                     str(original_path),
                     "-codec",
                     "copy",
+                    "-strict",
+                    "unofficial",
                     "-bsf:v",
                     bsf,
                     str(output_path),
@@ -541,7 +547,7 @@ class Video(Track):
 
         out_path = Path(out_path)
 
-        def run_ccextractor() -> bool:
+        def run_ccextractor(fallback: str) -> bool:
             cc_start = time.monotonic()
             try:
                 subprocess.run(
@@ -560,7 +566,7 @@ class Video(Track):
                 )
                 if e.returncode < 0:
                     logging.getLogger("Video").warning(
-                        f"ccextractor crashed (signal {-e.returncode}) on {self.path.name}; skipping CC extraction"
+                        f"ccextractor crashed (signal {-e.returncode}) on {self.path.name}; {fallback}"
                     )
                     return out_path.exists()
                 if e.returncode != 10:  # 10 = No captions found
@@ -576,9 +582,9 @@ class Video(Track):
 
         # Try on the original file first (preserves container-level CC data like c608 boxes),
         # then fall back to repacked file (ccextractor can fail on some container formats).
-        if not run_ccextractor():
+        if not run_ccextractor("retrying on a repackaged copy"):
             self.repackage()
-            run_ccextractor()
+            run_ccextractor("skipping CC extraction")
 
         if out_path.exists():
             cc_track = Subtitle(

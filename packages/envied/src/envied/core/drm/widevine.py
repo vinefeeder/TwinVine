@@ -21,6 +21,8 @@ from envied.core import binaries
 from envied.core.config import config
 from envied.core.console import console
 from envied.core.constants import AnyTrack
+from envied.core.drm import key_args as drm_key_args
+from envied.core.session import utf8_text
 from envied.core.utilities import get_boxes, log_event
 from envied.core.utils.subprocess import ffprobe
 
@@ -93,7 +95,7 @@ class Widevine:
 
         if track.descriptor == track.Descriptor.HLS:
             m3u_url = track.url
-            master = m3u8.loads(session.get(m3u_url).text, uri=m3u_url)
+            master = m3u8.loads(utf8_text(session.get(m3u_url)), uri=m3u_url)
             pssh_boxes.extend(
                 Box.parse(base64.b64decode(x.uri.split(",")[-1]))
                 for x in (master.session_keys or master.keys)
@@ -315,23 +317,19 @@ class Widevine:
             output_size=path.stat().st_size if path.exists() else 0,
         )
 
-    def mp4decrypt_key_args(self) -> list[str]:
-        """Build the mp4decrypt --key arguments for every content key."""
-        key_args = []
-        for kid, key in self.content_keys.items():
-            kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
-            key_hex = key if isinstance(key, str) else key.hex()
-            key_args.extend(["--key", f"{kid_hex}:{key_hex}"])
+    def own_kids(self) -> list[UUID]:
+        """Return the KIDs that identify this track's own content key.
 
-        # Fallback for tracks whose tenc default_KID is all-zero and whose real
-        # KID is signalled out-of-band: emit a zero-KID entry per content key.
-        zero_kid = "00" * 16
-        existing_kids = {kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "") for kid in self.content_keys}
-        if zero_kid not in existing_kids:
-            for key in self.content_keys.values():
-                key_hex = key if isinstance(key, str) else key.hex()
-                key_args.extend(["--key", f"{zero_kid}:{key_hex}"])
-        return key_args
+        The KID given to the constructor (from the manifest or the init segment) names the
+        track exactly. A PSSH can name the KIDs of other renditions too.
+        """
+        if self._kid and self._kid in self.content_keys:
+            return [self._kid]
+        return self.kids
+
+    def mp4decrypt_key_args(self) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key and the zero-KID fallback."""
+        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids())
 
     def decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
@@ -385,19 +383,7 @@ class Widevine:
                 f"input={path},stream=0,output={output_path},output_format=MP4",
                 "--enable_raw_key_decryption",
                 "--keys",
-                ",".join(
-                    [
-                        *[
-                            "label={}:key_id={}:key={}".format(i, kid.hex, key.lower())
-                            for i, (kid, key) in enumerate(self.content_keys.items())
-                        ],
-                        *[
-                            # some services use a blank KID on the file, but real KID for license server
-                            "label={}:key_id={}:key={}".format(i, "00" * 16, key.lower())
-                            for i, (kid, key) in enumerate(self.content_keys.items(), len(self.content_keys))
-                        ],
-                    ]
-                ),
+                drm_key_args.shaka_keys(self.content_keys, self.own_kids()),
                 "--temp_dir",
                 config.directories.temp,
             ]

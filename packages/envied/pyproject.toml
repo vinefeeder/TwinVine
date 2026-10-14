@@ -4,10 +4,10 @@ build-backend = "uv_build"
 
 [project]
 name = "envied"
-version = "5.5.0"
+version = "6.0.0"
 description = "Modular Movie, TV, and Music Archival Software."
-authors = [{ name = "rlaphoenix and others" }]
-requires-python = ">=3.10,<=3.15"
+authors = [{ name = "rlaphoenix by hand and others with AI" }]
+requires-python = ">=3.10,<=3.16"
 readme = "README.md"
 license = "GPL-3.0-only"
 keywords = [
@@ -70,6 +70,7 @@ dependencies = [
     "mutagen>=1.47.0,<2",
     "defusedxml>=0.7.1",
     "rich-click>=1.9.8",
+    "mediaexport @ git+https://github.com/unshackle-dl/mediaexport@main",
     # envied specific dependencies
     "webvtt-py>=0.5.1,<0.6",
     "isodate>=0.7.2,<0.8",

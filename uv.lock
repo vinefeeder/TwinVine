@@ -667,7 +667,7 @@ wheels = [
 
 [[package]]
 name = "envied"
-version = "5.5.0"
+version = "6.0.0"
 source = { editable = "packages/envied" }
 dependencies = [
     { name = "aiohttp" },
@@ -690,6 +690,7 @@ dependencies = [
     { name = "langcodes" },
     { name = "language-data" },
     { name = "lxml" },
+    { name = "mediaexport" },
     { name = "mutagen" },
     { name = "mypy" },
     { name = "protobuf" },
@@ -755,6 +756,7 @@ requires-dist = [
     { name = "langcodes", specifier = ">=3.4.0,<4" },
     { name = "language-data", specifier = ">=1.4.0" },
     { name = "lxml", specifier = ">=5.2.1,<7" },
+    { name = "mediaexport", git = "https://github.com/unshackle-dl/mediaexport?rev=main" },
     { name = "mutagen", specifier = ">=1.47.0,<2" },
     { name = "mypy", specifier = ">=1.19.1,<=2.1.0" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
@@ -1456,6 +1458,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
+
+[[package]]
+name = "mediaexport"
+version = "0.1.0"
+source = { git = "https://github.com/unshackle-dl/mediaexport?rev=main#fa9357e961d050450b59b1e4a839761121b2bcbd" }
 
 [[package]]
 name = "more-itertools"

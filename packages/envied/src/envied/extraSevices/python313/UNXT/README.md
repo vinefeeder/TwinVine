@@ -20,8 +20,8 @@ uv run unshackle dl --list -vl all -al orig -sl all -q 2160 -v h.265 -r HDR10 UN
 
 ## Tips
 
-- Configure user settings within the `unshackle.yaml` file.
-  사용자 설정은 `unshackle.yaml`에서 다음과 같이 사용하세요.
+- Configure user settings within the `envied.yaml` file.
+  사용자 설정은 `envied.yaml`에서 다음과 같이 사용하세요.
   
   ```
   services:

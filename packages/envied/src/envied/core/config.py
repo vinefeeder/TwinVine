@@ -70,6 +70,17 @@ def resolve_cdm_name(cdm: dict, service: str, override: Any = None) -> Any:
     return override or ci_get(cdm, service) or ci_get(cdm, "default")
 
 
+def cdm_entry_names_device(entry: Any, profile: Optional[str] = None) -> bool:
+    """Whether a per-service ``cdm`` entry names a device when no quality is known.
+
+    An entry that selects only by quality, or by a different profile, names none.
+    """
+    if not isinstance(entry, dict):
+        return bool(entry)
+    systems = {"widevine", "playready"} & {str(key).lower() for key in entry}
+    return bool(systems or entry.get(profile) or entry.get("default"))
+
+
 class Config:
     class _Directories:
         # default directories, do not modify here, set via config
@@ -182,6 +193,7 @@ class Config:
         # mask local base dirs (install root/venv/home) in logged paths; False shows full paths
         self.redact_paths: bool = kwargs.get("redact_paths", True)
         self.continue_downloads: bool = kwargs.get("continue_downloads", False)
+        self.sample: Optional[tuple[int, int]] = None
         self.post_scripts: list = kwargs.get("post_scripts") or []
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
@@ -362,13 +374,14 @@ class Config:
 
 
 # noinspection PyProtectedMember
+PACKAGE_CONFIG_PATH = Config._Directories.namespace_dir / Config._Filenames.root_config
+USER_CONFIG_PATH = Path(Config._Directories.app_dirs.user_config_dir) / Config._Filenames.root_config
+# noinspection PyProtectedMember
 POSSIBLE_CONFIG_PATHS = (
-    # The unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/unshackle)
-    Config._Directories.namespace_dir / Config._Filenames.root_config,
+    PACKAGE_CONFIG_PATH,
     # The Parent Folder to the unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
     Config._Directories.namespace_dir.parent / Config._Filenames.root_config,
-    # The AppDirs User Config Folder (e.g., ~/.config/unshackle on Linux, %LOCALAPPDATA%\unshackle on Windows)
-    Path(Config._Directories.app_dirs.user_config_dir) / Config._Filenames.root_config,
+    USER_CONFIG_PATH,
 )
 
 

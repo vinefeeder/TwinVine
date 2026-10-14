@@ -46,9 +46,11 @@ class SessionEntry:
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None
     server_account: Optional[str] = None  # profile name when the server lent its own account
-    client_auth: bool = (
-        False  # the client sent its own cookies, credentials, or cache files, or answered a login prompt
-    )
+    server_cdm: Optional[bool] = None  # False: the client's own device licenses this session
+    server_cdm_max_height: Optional[int] = None
+    server_vault: bool = False  # a session the client's device licenses may still take keys from the server vault
+    server_device: bool = False  # its service runs on the server's lent device, so keys come only from a vault
+    client_auth: bool = False  # the login is the client's: it succeeded without a server account
     input_bridge: Optional[InputBridge] = None
     log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
@@ -61,6 +63,15 @@ class SessionEntry:
     def touch(self) -> None:
         """Update last_accessed timestamp."""
         self.last_accessed = datetime.now(timezone.utc)
+
+    @property
+    def in_use(self) -> bool:
+        """True while a request holds the lock for service work; the store does not expire such a remote session.
+
+        A request can run for longer than the TTL, and expiry would remove the cache directory
+        that the worker thread still writes to.
+        """
+        return self.lock.locked()
 
     def summary(self) -> Dict[str, Any]:
         """Dashboard view of the session: no service instance, no raw owner key."""
@@ -83,6 +94,8 @@ class SessionEntry:
             "auth_status": self.auth_status.value,
             "auth_error": self.auth_error,
             "server_account": self.server_account,
+            "server_cdm": self.server_cdm,
+            "server_cdm_max_height": self.server_cdm_max_height,
             "log_seq": self.log_buffer.last_seq if self.log_buffer else 0,
             "client": self.client,
             "actions": list(self.actions),
@@ -145,7 +158,8 @@ class SessionStore:
         async with self._lock:
             max_sessions = self.max_sessions
             if max_sessions is not None and len(self._sessions) >= max_sessions:
-                oldest_id = min(self._sessions, key=lambda k: self._sessions[k].last_accessed)
+                sessions = self._sessions
+                oldest_id = min(sessions, key=lambda k: (sessions[k].in_use, sessions[k].last_accessed))
                 log.warning(f"Max sessions reached ({max_sessions}), evicting oldest: {oldest_id}")
                 evicted = self._sessions.pop(oldest_id)
                 if evicted.input_bridge:
@@ -175,7 +189,7 @@ class SessionStore:
             if entry is None:
                 return None
 
-            if entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+            if not entry.in_use and entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
@@ -215,6 +229,8 @@ class SessionStore:
             now = datetime.now(timezone.utc)
             expired = []
             for sid, entry in self._sessions.items():
+                if entry.in_use:
+                    continue
                 elapsed = (now - entry.last_accessed).total_seconds()
                 if entry.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                     if elapsed > AUTH_INPUT_TIMEOUT:

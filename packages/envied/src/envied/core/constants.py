@@ -4,6 +4,9 @@ from typing import TypeVar, Union
 DOWNLOAD_CANCELLED = Event()
 DOWNLOAD_LICENCE_ONLY = Event()
 
+DEFAULT_SAMPLE = (120, 180)
+DOWNLOAD_ALL_DRM = Event()
+
 
 class DownloadCancelled(Exception):
     """A track stopped because ``DOWNLOAD_CANCELLED`` was set, not because it itself failed.

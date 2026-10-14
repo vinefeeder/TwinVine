@@ -15,6 +15,7 @@ import click
 
 from envied.core import binaries
 from envied.core.config import config
+from envied.core.constants import DEFAULT_SAMPLE
 from envied.core.service import Service
 from envied.core.service_repo import DirtyServiceRepo, head, is_repo_spec, refresh_repo, resolve_service_repo
 from envied.core.utilities import import_module_by_path
@@ -360,16 +361,17 @@ class Services(click.Group):
         super().format_help(ctx, formatter)
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        """Preprocess ``--slow`` so it can take an optional range value before Click parses the arguments."""
+        """Preprocess ``--slow`` and ``--sample`` so each can take an optional range value before Click parses."""
+        defaults = {"--slow": "60-120", "--sample": "{}-{}".format(*DEFAULT_SAMPLE)}
         processed = []
         i = 0
         while i < len(args):
-            if args[i] == "--slow":
+            if args[i] in defaults:
                 if i + 1 < len(args) and re.match(r"^\d+-\d+$", args[i + 1]):
-                    processed.append(f"--slow={args[i + 1]}")
+                    processed.append(f"{args[i]}={args[i + 1]}")
                     i += 2
                 else:
-                    processed.append("--slow=60-120")
+                    processed.append(f"{args[i]}={defaults[args[i]]}")
                     i += 1
             else:
                 processed.append(args[i])
@@ -452,7 +454,9 @@ class Services(click.Group):
 
             server_name = ctx.params.get("server")
             server_url, api_key, services_config = resolve_server(server_name)
-            client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
+            client = RemoteClient(
+                server_url, api_key, services_config.get("_auth_headers"), services_config.get("_timeout")
+            )
             result = client.get("/api/services")
             Services.remote_services_cache = result.get("services", [])
             return Services.remote_services_cache
@@ -508,6 +512,7 @@ class Services(click.Group):
             server_name = ctx.parent.params.get("server") if ctx.parent else None
             server_url, api_key, services_config = resolve_server(server_name)
             services_config["_server_accounts"] = svc_info.get("server_accounts") if svc_info else None
+            services_config["_client_config"] = svc_info.get("client_config") if svc_info else None
             service_params = {k: v for k, v in kwargs.items() if v is not None and v is not False}
             return RemoteService(ctx, tag, title, server_url, api_key, services_config, service_params=service_params)
 

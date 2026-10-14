@@ -20,7 +20,36 @@ from envied.core.update_checker import UpdateChecker
 from envied.core.utilities import close_debug_logger, init_debug_logger
 
 
-@click.command(cls=Commands, invoke_without_command=True, context_settings=context_settings)
+def print_banner() -> None:
+    console.print(
+        Padding(
+            Group(
+                Text(
+                r"░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
+                r"░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
+                r"░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n" ,
+                    style="ascii.art",
+                ),
+                Text("  ...more than unshackled...", style = "ascii.art"),
+                f"\nv [repr.number]{__version__}[/] - https://github.com/vinefeeder/TwinVine - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n",
+            ),
+            (1, 11, 1, 10),
+            expand=True,
+        ),
+        justify="center",
+        )
+
+
+
+class Main(Commands):
+    """The top-level group. Its help shows the banner, because its callback does not run for --help."""
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        print_banner()
+        super().format_help(ctx, formatter)
+
+
+@click.command(cls=Main, invoke_without_command=True, context_settings=context_settings)
 @click.option("-v", "--version", is_flag=True, default=False, help="Print version information.")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Enable DEBUG level logs and JSON debug logging.")
 def main(version: bool, debug: bool) -> None:
@@ -58,23 +87,10 @@ def main(version: bool, debug: bool) -> None:
         if "--quiet" in serve_args or "-q" in serve_args:
             return
 
-    console.print(
-        Padding(
-            Group(
-                Text(
-                r"░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
-                r"░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
-                r"░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n" ,
-                    style="ascii.art",
-                ),
-                Text("  ...more than unshackled...", style = "ascii.art"),
-                f"\nv [repr.number]{__version__}[/] - https://github.com/vinefeeder/envied",
-            ),
-            (1, 11, 1, 10),
-            expand=True,
-        ),
-        justify="center",
-        )
+    print_banner()
+
+    if version:
+        return
 
     if config.update_checks:
         try:

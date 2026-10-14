@@ -17,7 +17,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Mapping, Optional, Sequence, Union
 from urllib.parse import ParseResult, urlparse
 from uuid import uuid4
 
@@ -118,7 +118,7 @@ def import_module_by_path(path: Path) -> ModuleType:
     return module
 
 
-def sanitize_filename(filename: str, spacer: str = ".") -> str:
+def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] = None) -> str:
     """
     Sanitise a string to be filename safe.
 
@@ -127,13 +127,16 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
 
     Set `unicode_filenames: true` in config to preserve the characters of the
     original language (for example Korean, Japanese, or Chinese) instead of
-    transliterating them to ASCII equivalents.
+    transliterating them to ASCII equivalents. Pass ``unicode`` to decide that
+    for one call instead of the config value. The name goes to NFC first, so
+    composed and decomposed spellings of a title give the same name.
     """
-    if not config.unicode_filenames:
+    filename = unicodedata.normalize("NFC", filename)
+    if not (config.unicode_filenames if unicode is None else unicode):
         filename = unidecode(filename)
         filename = re.sub(r"\[\(+", "[", filename)
         filename = re.sub(r"\)+\]", "]", filename)
-    filename = "".join(c for c in filename if unicodedata.category(c) not in ("Mn", "Cc"))
+    filename = "".join(c for c in filename if unicodedata.category(c) != "Cc")
     filename = filename.replace("/", " & ").replace(";", " & ")  # e.g. multi-episode filenames
     if spacer == ".":
         filename = re.sub(r" - ", spacer, filename)  # title separators to spacer (avoids .-. pattern)
@@ -142,7 +145,8 @@ def sanitize_filename(filename: str, spacer: str = ".") -> str:
     filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
     filename = filename.strip(" .")  # strip leading and trailing spaces and dots for OS path safety
 
-    return filename
+    # A removed character can leave a letter next to a mark it did not have before.
+    return unicodedata.normalize("NFC", filename)
 
 
 def is_close_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
@@ -231,6 +235,29 @@ def keep_forced_subtitle(
     return match_func(language, forced_s_lang)
 
 
+def kind_only_conflict(params: Mapping[str, Any]) -> Optional[tuple[str, str]]:
+    """
+    Return the first (kind-only flag, flag that drops its track type) pair that are both set.
+
+    The ``*_only`` track-type flags combine, so another one only drops the kind-only
+    flag's track type when its own ``*_only`` flag is not set as well.
+    """
+    for flag, own_only, no_flag in (
+        ("audio_description_only", "audio_only", "no_audio"),
+        ("forced_subs_only", "subs_only", "no_subs"),
+    ):
+        if not params.get(flag):
+            continue
+        if params.get(no_flag):
+            return flag, no_flag
+        if params.get(own_only):
+            continue
+        for other in ("video_only", "audio_only", "subs_only", "chapters_only"):
+            if params.get(other):
+                return flag, other
+    return None
+
+
 def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
     """
     Return the audio languages carried inside video tracks rather than beside them.
@@ -242,6 +269,24 @@ def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
     if not keep_videos:
         return []
     return [video.data["audio_language"] for video in videos if video.data.get("audio_language")]
+
+
+def apply_original_language(title: Any, language: Language) -> None:
+    """
+    Make ``language`` the title's original language over the one the service set.
+
+    A service tags its videos and original-language flags with its own guess, so the videos that
+    carry that guess move to ``language`` and every track's flag is set again.
+    """
+    guess = title.language
+    if guess == language:
+        return
+    for video in title.tracks.videos:
+        if guess and video.language == guess:
+            video.language = language
+    for track in title.tracks:
+        track.is_original_lang = bool(track.language and is_close_match(track.language, [language]))
+    title.language = language
 
 
 def find_missing_langs(

@@ -6,6 +6,7 @@ import click
 from click.shell_completion import CompletionItem
 from pywidevine.cdm import Cdm as WidevineCdm
 
+from envied.core.constants import DEFAULT_SAMPLE
 from envied.core.tracks.audio import Audio
 from envied.core.tracks.subtitle import Subtitle
 from envied.core.tracks.video import Video
@@ -156,11 +157,20 @@ class SubtitleCodecChoice(click.Choice):
 
 
 class ContextData:
-    def __init__(self, config: dict, cdm: WidevineCdm, proxy_providers: list, profile: Optional[str] = None):
+    def __init__(
+        self,
+        config: dict,
+        cdm: WidevineCdm,
+        proxy_providers: list,
+        profile: Optional[str] = None,
+        cdm_entry: bool = False,
+    ):
         self.config = config
         self.cdm = cdm
         self.proxy_providers = proxy_providers
         self.profile = profile
+        # True when the service's own entry in the cdm config named the loaded device
+        self.cdm_entry = cdm_entry
 
 
 class SeasonRange(click.ParamType):
@@ -496,6 +506,26 @@ class SlowDelayRange(click.ParamType):
         return (low, high)
 
 
+class SampleRange(click.ParamType):
+    """Parses a sample window string like '60-120' into a tuple of (start, end) seconds."""
+
+    name = "sample_range"
+
+    def convert(
+        self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]
+    ) -> Optional[tuple[int, int]]:
+        if isinstance(value, bool):
+            return DEFAULT_SAMPLE if value else None
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            value = f"{value[0]}-{value[1]}"
+
+        match = re.match(r"^(\d+)-(\d+)$", str(value))
+        if not match or int(match.group(1)) >= int(match.group(2)):
+            self.fail(f"'{value}' is not a valid sample window. Use format: START-END (e.g., 60-120)", param, ctx)
+
+        return (int(match.group(1)), int(match.group(2)))
+
+
 SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
@@ -503,3 +533,4 @@ AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
 VIDEO_CODEC_LIST = MultipleVideoCodecChoice(Video.Codec)
 SUBTITLE_CODEC = SubtitleCodecChoice(Subtitle.Codec)
 SLOW_DELAY_RANGE = SlowDelayRange()
+SAMPLE_RANGE = SampleRange()

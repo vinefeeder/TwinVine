@@ -9,8 +9,9 @@ from enum import Enum
 from functools import partial
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, Sequence, Union
 
+import click
 import pycaption
 import requests
 from construct import Container
@@ -1000,6 +1001,43 @@ class Subtitle(Track):
                         captions.append(caption)
 
         return captions, language
+
+    def sample_slice(
+        self, starts: Sequence[float], timescale: float = 1, window: Optional[tuple[int, int]] = None
+    ) -> slice:
+        """Return the segments of ``window`` plus one segment on each side.
+
+        Cue times in a segment are absolute, so ``sample_start`` stays zero and ``trim`` makes the cut.
+        A track that ends before the window keeps only its last segment.
+        """
+        try:
+            keep = super().sample_slice(starts, timescale, window)
+        except click.ClickException:
+            keep = slice(len(starts) - 1, None)
+        self.sample_start = 0.0
+        if keep.start is None:
+            return keep
+        return slice(max(keep.start - 1, 0), None if keep.stop is None else keep.stop + 1)
+
+    def trim(self, start: float, end: float) -> bool:
+        """Keep the cues between ``start`` and ``end`` seconds and move them to start at zero.
+
+        Returns False and leaves the file whole when pysubs2 cannot read or write its format.
+        """
+        import pysubs2
+
+        low, high = round(start * 1000), round(end * 1000)
+        try:
+            subs = pysubs2.load(str(self.path), encoding="utf-8")
+            subs.events = [event for event in subs.events if event.end > low and event.start < high]
+            for event in subs.events:
+                event.start = max(event.start, low) - low
+                event.end = min(event.end, high) - low
+            subs.save(str(self.path))
+        except (pysubs2.exceptions.Pysubs2Error, UnicodeDecodeError):
+            return False
+        self.sample_start = start
+        return True
 
     def strip_hearing_impaired(self) -> None:
         """
