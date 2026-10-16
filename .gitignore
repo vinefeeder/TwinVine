@@ -5,7 +5,7 @@ Temp/
 packages/envied/src/envied/logs/
 packages/envied/src/envied/envied.yaml
 packages/envied/src/envied/cache/TVNZ/local_storage.json
-packages/envied/src/envied/services
+#packages/envied/src/envied/services
 packages/envied/src/Cookies/*
 images/*
 tools/
