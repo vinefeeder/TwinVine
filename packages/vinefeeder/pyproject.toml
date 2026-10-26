@@ -1,9 +1,9 @@
 [project]
 name = "vinefeeder"
-version = "0.2.0"
+version = "0.2.1"
 description = "GUI front-end for envied"
 readme = "README.md"
-requires-python = ">=3.10,<=3.15"
+requires-python = ">=3.11,<=3.15"
 
 dependencies = [
   "envied",         # resolved via [tool.uv.sources] at the workspace root
@@ -20,5 +20,5 @@ vinefeeder = "vinefeeder.__main__:main"  #  GUI entry point
 requires = ["uv_build>=0.8.12,<1.0.0"]
 build-backend = "uv_build"
 
-[tool.uv.package-data]
+[tool.package-data]
 vinefeeder = ["config.yaml", "services/**", "images/**"]

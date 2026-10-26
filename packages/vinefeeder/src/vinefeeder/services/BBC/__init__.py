@@ -6,7 +6,7 @@ For reliable UHD detection, use the vinefeeder text box with string rather than 
 from pydoc import html
 
 from vinefeeder.base_loader import BaseLoader
-from vinefeeder.parsing_utils import extract_params_json, parse_json, split, split_options
+from vinefeeder.parsing_utils import  parse_json, split, split_options
 from rich.console import Console
 import jmespath
 from scrapy.selector import Selector
@@ -416,7 +416,8 @@ class BbcLoader(BaseLoader):
                 command = (['uv', 'run', 'envied', "dl", *self.options_list, "iP", url.replace(" ", "-")])
             self.runsubprocess(command)
         return
-
+    
+       
     def fetch_videos_by_category(self, browse_url):
         """
         Fetches videos from a category (Channel 4 specific).
@@ -428,7 +429,7 @@ class BbcLoader(BaseLoader):
         #beaupylist = []
 
         req = self.client.get(browse_url, headers=self.headers)
-        init_data = extract_params_json(req.content.decode(), "__IPLAYER_REDUX_STATE__")
+        init_data = extract_params_json(req.content.decode(), "__INITIAL_DATA__")
 
         """
         # for bug fixing
@@ -440,19 +441,44 @@ class BbcLoader(BaseLoader):
 
         myjson = init_data
         # console.print_json(data=myjson)
-        category = myjson["bundles"][0]["id"]
+        category = jmespath.search(
+            """
+            page.entry.stores[?name=='metadata']
+            | [0].initialState.props[?name=='page']
+            | [0].value.schemaOrg.name
+            """,
+            myjson,
+        )
+        if category is not None:
+            category = category.removesuffix(" - BBC iPlayer")
+        else:
+            category = "Unknown Category"
 
+        # debug only
+        ''' with open("extracted_json_data.json", "w") as f:
+            json.dump(myjson, f, indent=4)
+            f.write("\n")  # Add a newline at the end of the file
+            f.flush()  # Ensure the data is written to the file immediately
+            f.close()  # Close the file to release resources
+        '''
         res = jmespath.search(
             """
-            bundles[*].entities[*].episode[].{
-                href: id,
-                label: title.default,
-                overlaytext: synopsis.small
+            data.* | [].data.promos[] |
+            [?url != `null` && starts_with(url, '/iplayer/episode/')].{
+                href: url,
+                label: contentTitle,
+                overlaytext: description
             }
             """,
             myjson,
         )
-        # console.print_json(data=res)
+
+
+
+        res = [
+            item for item in res
+            if item["href"].startswith("/iplayer/episode/")
+        ]
 
         seen_titles = set()  # To track seen titles
         beaupylist = list()
@@ -460,8 +486,8 @@ class BbcLoader(BaseLoader):
         # Build the beaupylist for display but check for duplicates
         for i, item in enumerate(res):
             label = item["label"]  # Title of the programme
-            overlaytext = item["overlaytext"]  # Synopsis of the programme
-            formatted_item = f"{i} {label}\n\t{overlaytext}"
+            #overlaytext = item["href"]  # Url of the programme
+            formatted_item = f"{i} {label}"#\n\t{overlaytext}"
 
             if (
                 label not in seen_titles
@@ -472,7 +498,7 @@ class BbcLoader(BaseLoader):
         found = self.display_beaupylist(beaupylist)
         if found:
             if category not in [
-                "films",
+                "Films",
                 "featured-category-films",
                 "featured-films",
                 "film",
@@ -484,8 +510,9 @@ class BbcLoader(BaseLoader):
             else:
                 ind = found.split(" ")[0]
                 url = res[int(ind)]["href"]
+                label = res[int(ind)]["label"]
                 # url may be for series or single Film
-                url = f"https://www.bbc.co.uk/iplayer/episode/{url}"
+                url = f"https://www.bbc.co.uk{url}/{label.replace(' ', '-').lower()}"
                 #url = url.encode("utf-8", "ignore").decode().strip()  # has spaces!
                 
 
@@ -496,4 +523,69 @@ class BbcLoader(BaseLoader):
             print("No video selected.")
             return
         
+def extract_params_json(html, discriminator="__PARAMS__", index=0):  # BBC specific
+    """
+    For scripts like <script>window.__PARAMS__ = ...;</script>
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Extract the JSON data from the HTML content that is stored in the
+    __PARAMS__ variable. This is typically used to parse the JSON data
+    from the HTML content of a page that contains a script tag with a
+        __PARAMS__ variable.
+        pass other discriminator if needed.
+
+        Args:
+            html (str): The HTML content from which to extract the JSON data.
+
+        Returns:
+            dict: The parsed JSON data, or None if no __PARAMS__ variable
+                was found, or if the JSON could not be parsed.
+    """
+    try:
+        # Use Scrapy's Selector to locate the script tag containing "__PARAMS__"
+        sel = Selector(text=html)
+
+        # Extract the script content that contains 'window.__PARAMS__'
+        # selected_script = sel.xpath(f'//script[contains(text(), "{discriminator}")]/text()').extract_first()
+
+        scripts = sel.xpath(f'//script[contains(text(), "{discriminator}")]/text()')
+
+        if 0 <= index < len(scripts):
+            selected_script = scripts[index].get()
+        else:
+            return None
+
+        # Remove 'window.__PARAMS__ =' and trailing semicolon
+        json_data = (
+            selected_script.strip()
+            .replace('\\"', '"')
+            .replace(f"window.{discriminator}=", "")
+            .rstrip(";'")
+            .replace("\u200c", "")
+            .replace("\r\n", "")
+
+        )
     
+        # Replace 'undefined' with 'null' to make the JSON valid
+        json_data = json_data.replace("undefined", "null")
+
+        # Prepare to parse the JSON string
+        json_data = json_data[1:-1]  # Remove the first and last characters ('")
+        json_data = json_data.strip()  # Remove any leading or trailing whitespace
+
+
+        '''with open("json_data.json", "w") as f:
+            json.dump(json_data, f, indent=4)
+            f.write("\n")  # Add a newline at the end of the file
+            f.flush()  # Ensure the data is written to the file immediately
+            f.close()  # Close the file to release resources'''
+    
+
+        parsed_json = json.loads(json_data)
+
+        return parsed_json
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return None

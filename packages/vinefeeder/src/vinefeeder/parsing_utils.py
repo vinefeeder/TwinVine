@@ -96,7 +96,6 @@ def extract_params_json(html, discriminator="__PARAMS__", index=0):
         print(f"Unexpected error: {e}")
         return None
 
-
 def extract_script_with_id_json(html: str, discriminator: str, index: int = 0):
     """
     For scripts like <script id="__NEXT_DATA__" type="application/json">
