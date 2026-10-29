@@ -110,7 +110,7 @@ directories:
   services:
     # HIGHEST PRIORITY LISTED AND LOADED FIRST, DUPLICATE SERVICES IGNORED; CHANGLE ORDER TO SUIT.
 
-    #- ./packages/envied/src/envied/services ## local user services provided by you.
+    - ./packages/envied/src/envied/services ## local user services provided by you.
     #- https://git.gay/stabbedbybrick/unshackle-services.git
     - https://git.gay/vinefeeder/twinvine-services.git  # remote with 70+ services
     #- ./packages/envied/src/envied/extraSevices/python313/  #uncomment to include extra YT. Addition may break some installations not python3.13, if so revert.
