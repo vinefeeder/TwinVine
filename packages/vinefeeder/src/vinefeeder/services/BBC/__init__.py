@@ -6,7 +6,7 @@ For reliable UHD detection, use the vinefeeder text box with string rather than 
 from pydoc import html
 
 from vinefeeder.base_loader import BaseLoader
-from vinefeeder.parsing_utils import  parse_json, split, split_options
+from vinefeeder.parsing_utils import  parse_json, extract_params_json, split, split_options
 from rich.console import Console
 import jmespath
 from scrapy.selector import Selector
@@ -420,24 +420,27 @@ class BbcLoader(BaseLoader):
        
     def fetch_videos_by_category(self, browse_url):
         """
-        Fetches videos from a category (Channel 4 specific).
+        Fetches videos from a category.
         Args:
             browse_url (str): URL of the category page.
         Returns:
             None
         """
         #beaupylist = []
+        if 'browse' in browse_url:
+            req = self.client.get(browse_url, headers=self.headers)
+            init_data = extract_params_json_local(req.content.decode(), "__INITIAL_DATA__")
+        else:
+            req = self.client.get(browse_url, headers=self.headers)
+            init_data = extract_params_json(req.content.decode(), "__IPLAYER_REDUX_STATE__")
 
-        req = self.client.get(browse_url, headers=self.headers)
-        init_data = extract_params_json(req.content.decode(), "__INITIAL_DATA__")
-
-        """
+        
         # for bug fixing
-        console.print_json(data=init_data)
+        '''console.print_json(data=init_data)
         file = open("init_data.json", "w")
         file.write(json.dumps(init_data))
-        file.close()
-        """
+        file.close()'''
+    
 
         myjson = init_data
         # console.print_json(data=myjson)
@@ -452,34 +455,62 @@ class BbcLoader(BaseLoader):
         if category is not None:
             category = category.removesuffix(" - BBC iPlayer")
         else:
-            category = "Unknown Category"
+            # not Films. Using old __IPLAYER_REDUX_STATE__ json rather than javascript wrapped  __INITIAL_DATA__ .
+            category = myjson.get("category", {}).get("title", {})
+            if not category:
+                category = "Unknown Category"
 
         # debug only
-        ''' with open("extracted_json_data.json", "w") as f:
+        '''with open("extracted_json_data.json", "w") as f:
             json.dump(myjson, f, indent=4)
             f.write("\n")  # Add a newline at the end of the file
             f.flush()  # Ensure the data is written to the file immediately
-            f.close()  # Close the file to release resources
-        '''
-        res = jmespath.search(
-            """
-            data.* | [].data.promos[] |
-            [?url != `null` && starts_with(url, '/iplayer/episode/')].{
-                href: url,
-                label: contentTitle,
-                overlaytext: description
-            }
-            """,
-            myjson,
-        )
+            f.close()  # Close the file to release resources'''
 
+        
+        #if category in ["Films", "Comedy", "Drama and Soaps", "Drama-and-Soaps", "Sport", "Entertainment", "Music",  "Science and Nature"]:
+        if "Documentary" not in category:
+            res = jmespath.search(
+                """
+                data.* | [].data.promos[] | [].{
+                    href: url,
+                    label: contentTitle,
+                    overlaytext: description
+                }
+                """,
+                myjson,
+            )
 
+     
+            
 
-        res = [
-            item for item in res
-            if item["href"].startswith("/iplayer/episode/")
-        ]
+            res = [
+                item for item in res
+                if (item.get("href") or "").startswith("/iplayer")
+            ]
+            
 
+        else:
+            res = jmespath.search(
+                """
+                bundles[].entities[].episode.{
+                    href: id,
+                    label: title.default,
+                    overlaytext: synopsis
+                }
+                """,
+                myjson,
+            )
+            for item in res or []:
+                title = item["label"]
+                slug = title.replace(" ", "-").lower()
+
+                item["href"] = (
+                    f"https://www.bbc.co.uk/iplayer/episode/"
+                    f"{item['href']}/{slug}"
+                )
+
+ 
         seen_titles = set()  # To track seen titles
         beaupylist = list()
 
@@ -523,7 +554,7 @@ class BbcLoader(BaseLoader):
             print("No video selected.")
             return
         
-def extract_params_json(html, discriminator="__PARAMS__", index=0):  # BBC specific
+def extract_params_json_local(html, discriminator="__PARAMS__", index=0):  # BBC specific
     """
     For scripts like <script>window.__PARAMS__ = ...;</script>
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -9,14 +9,14 @@ options:
 
 media_dict:
   Film: 'https://www.bbc.co.uk/iplayer/browse/films'
-  # Documentary: 'https://www.bbc.co.uk/iplayer/categories/documentaries/featured'
-  # Comedy: 'https://www.bbc.co.uk/iplayer/categories/comedy/featured'
-  # Drama: 'https://www.bbc.co.uk/iplayer/categories/drama-and-soaps/featured'
-  # Entertainment: 'https://www.bbc.co.uk/iplayer/categories/entertainment/featured'
-  # Lifestyle: 'https://www.channel4.com/categories/lifestyle'
-  # News: 'https://www.bbc.co.uk/iplayer/categories/news/featured'
-  # Sport: 'https://www.bbc.co.uk/iplayer/categories/sport/featured'
-  # Lifestyle: 'https://www.bbc.co.uk/iplayer/categories/lifestyle/featured'
-  # History: 'https://www.bbc.co.uk/iplayer/categories/history/featured'
-  # Science/Nature: 'https://www.bbc.co.uk/iplayer/categories/science-and-nature/featured'
+  Documentary: 'https://www.bbc.co.uk/iplayer/categories/documentaries/featured'
+  Comedy: 'https://www.bbc.co.uk/iplayer/browse/comedy'
+  Drama: 'https://www.bbc.co.uk/iplayer/browse/drama-and-soaps'
+  Entertainment: 'https://www.bbc.co.uk/iplayer/browse/entertainment'
+  Music: "https://www.bbc.co.uk/iplayer/browse/music"
+  News: 'https://www.bbc.co.uk/iplayer/browse/news'
+  Sport: 'https://www.bbc.co.uk/iplayer/browse/sport'
+  Lifestyle: 'https://www.bbc.co.uk/iplayer/browse/lifestyle'
+  History: 'https://www.bbc.co.uk/iplayer/browse/history'
+  Science/Nature: 'https://www.bbc.co.uk/iplayer/browse/science-and-nature'
   
