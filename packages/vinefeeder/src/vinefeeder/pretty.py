@@ -33,13 +33,11 @@ def pretty_print():
         f"| | / (_)__  ___ / __/__ ___ ___/ /__ ____" "\n"
         f"| |/ / / _ \\/ -_) _// -_) -_) _  / -_) __/" "\n"
         f"|___/_/_//_/\\__/__/  \\__/\\__/\\_,_/\\__/_/     [/]" + "\n\n"
-        f"[{catppuccin_mocha['gray']}]TwinVine version {__version__}[/]\n"
-        f"[{catppuccin_mocha['text2']}] 2024-26  A_n_g_e_l_a[/]\n\n"
         f"[{catppuccin_mocha['pink']}]driving...[/]\n\n"
         f"[{catppuccin_mocha['pink']}]░█▀▀░█▀█░█░█░▀█▀░█▀▀░█▀▄" + "\n"
         f"[{catppuccin_mocha['pink']}]░█▀▀░█░█░▀▄▀░░█░░█▀▀░█░█" + "\n"
         f"[{catppuccin_mocha['pink']}]░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀▀░" + "\n\n"
-        f"[{catppuccin_mocha['pink']}] ... more than unshacked....[/]" + "\n"
+        f"[{catppuccin_mocha['pink']}] ... more than unshackled....[/]" + "\n"
 
  
 
@@ -49,11 +47,15 @@ def pretty_print():
     # 
     instructions = (
         f"[{catppuccin_mocha['text2']}]uv run vinefeeder --help for options[/]\n"
-        f"[{catppuccin_mocha['text2']}]uv run envied -? for options.[/]")
+        f"[{catppuccin_mocha['text2']}]uv run envied -? for options.[/]\n\n")
+
+    credits = (
+        f"[{catppuccin_mocha['text2']}]Vinefeeder v{__version__}[/]\n"
+        f"[{catppuccin_mocha['text2']}]2024-2026 A_n_g_e_l_a[/]\n\n")
 
     # Display the panel
     panel = Panel(
-        text_block + "\n\n" + instructions,
+        text_block + "\n\n" + instructions + credits,
         title=f"[{catppuccin_mocha['pink']}]TwinVine[/]",
         border_style=catppuccin_mocha["text2"],
         padding=(0, 17, 1, 16),

@@ -108,7 +108,10 @@ class VineFeeder(QWidget):
         This method creates the necessary UI components and sets up the layout.
         
         """
+        self.setWindowFlags(Qt.WindowType.Dialog) # remove minimize/maximize buttons; only works on Windows not Wayland.
         self.setWindowTitle("VineFeeder")
+        
+
         layout = QVBoxLayout()
 
         self.search_url_label = QLabel("URL or Search")

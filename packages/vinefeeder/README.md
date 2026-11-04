@@ -1,6 +1,6 @@
 # VineFeeder
 
-**version 1.0.2**
+**version 2.0.2**
 
 VineFeeder is a dynamic Python-based application and **framework** that presents a graphical user interface (GUI) to act as a front-end for Devine (https://github.com/devine-dl/devine) or envied (https://github.com/envied-dl/envied)  - each a video-downloader, envied being a fork of devine.
 
