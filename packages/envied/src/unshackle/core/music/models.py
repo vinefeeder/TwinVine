@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from envied.core.titles.music import Song
 
 
+
 @dataclass
 class MusicTrackOption:
     codec: str
