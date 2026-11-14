@@ -65,6 +65,29 @@ class BbcLoader(BaseLoader):
 
         return uhd_list
 
+    @staticmethod
+    def _normalize_title(title: str) -> str:
+        """Normalize a programme title for exact UHD-list comparison."""
+        return " ".join((title or "").strip().lower().replace("-", " ").split())
+
+    def _title_on_uhd_list(self, title: str) -> bool:
+        """True when title exactly matches an entry on the scraped UHD list."""
+        needle = self._normalize_title(title)
+        if not needle:
+            return False
+        return any(self._normalize_title(item) == needle for item in self.uhd_list)
+
+    def _episode_has_uhd(self, episode: dict) -> bool:
+        """Prefer the episodes API uhd flag; fall back to exact UHD-list title match."""
+        versions = episode.get("versions") or []
+        flagged = [
+            v
+            for v in versions
+            if v.get("kind") not in ("audio-described", "signed") and "uhd" in v
+        ]
+        if flagged:
+            return any(bool(v.get("uhd")) for v in flagged)
+        return self._title_on_uhd_list(episode.get("title", ""))
 
     def receive(
         self, inx: None, search_term: None, category=None, hlg_status=False, opts=None
@@ -172,14 +195,9 @@ class BbcLoader(BaseLoader):
 
             return
 
-        # keyword search
+        # keyword search — HLG is decided later from the selected episode, not the search string
         elif inx == 3:
             print(f"Searching for {search_term}")
-            for hlg_item in self.uhd_list:
-
-                if search_term in hlg_item:
-                    self.AVAILABLE_HLG = True
-                    break
             return self.fetch_videos(search_term)
 
         # ALTERNATIVES BELOW FROM POP-UP MENU
@@ -349,16 +367,11 @@ class BbcLoader(BaseLoader):
 
         # Single episode  expedite download
         else:
-            series_name = parsed_data["episodes"][0]["title"]
-            url = f"https://www.bbc.co.uk/iplayer/episode/{parsed_data['episodes'][0]['id']}/{parsed_data['episodes'][0]['title']}"
-            # check for UHD content
-            for hlg_item in self.uhd_list:
-                if series_name.lower() in hlg_item:
-                    self.AVAILABLE_HLG = True
-                    break
-            # self.options_list = split_options(self.options)
-          
-
+            episode = parsed_data["episodes"][0]
+            series_name = episode["title"]
+            url = f"https://www.bbc.co.uk/iplayer/episode/{episode['id']}/{episode['title']}"
+            # HLG only when this selected episode is UHD (API flag or exact UHD-list title)
+            self.AVAILABLE_HLG = self._episode_has_uhd(episode)
 
             try:
                 if BbcLoader.HLG and self.AVAILABLE_HLG:
