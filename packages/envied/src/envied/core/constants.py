@@ -1,5 +1,8 @@
 from threading import Event
-from typing import TypeVar, Union
+from typing import TYPE_CHECKING, TypeVar, Union
+
+if TYPE_CHECKING:
+    from envied.core.tracks import Audio, Subtitle, Track, Video
 
 DOWNLOAD_CANCELLED = Event()
 DOWNLOAD_LICENCE_ONLY = Event()
@@ -20,15 +23,24 @@ class DownloadCancelled(Exception):
 DRM_SORT_MAP = ["ClearKey", "Widevine"]
 LANGUAGE_MAX_DISTANCE = 5  # this is max to be considered "same", e.g., en, en-US, en-AU
 LANGUAGE_EXACT_DISTANCE = 0  # exact match only, no variants
-VIDEO_CODEC_MAP = {"AVC": "H.264", "HEVC": "H.265"}
+VIDEO_CODEC_MAP = {"AVC": "H.264", "HEVC": "H.265", "VVC": "H.266"}
 DYNAMIC_RANGE_MAP = {
     "HDR10": "HDR",
     "HDR10+": "HDR10P",
     "Dolby Vision": "DV",
     "HDR10 / HDR10+": "HDR10P",
     "HDR10 / HDR10": "HDR",
+    "HDR Vivid": "HDRVivid",
 }
-AUDIO_CODEC_MAP = {"E-AC-3": "DDP", "AC-3": "DD", "DTS-UHD": "DTS-X"}
+AUDIO_CODEC_MAP = {
+    "E-AC-3": "DDP",
+    "DD+": "DDP",  # Audio.Codec.EC3's value, which the REST API names a track by
+    "AC-3": "DD",
+    "DTS-UHD": "DTS-X",
+    "DTS LBR": "DTS-LBR",
+    "MPEG-H 3D Audio": "MPEG-H",
+    "MPEG Audio Layer 3": "MP3",
+}
 
 SPACED_AUDIO_CODECS = {"DTS-X"}
 
@@ -39,9 +51,9 @@ context_settings = dict(
 
 # For use in signatures of functions which take one specific type of track at a time
 # (it can't be a list that contains e.g. both Video and Audio objects)
-TrackT = TypeVar("TrackT", bound="Track")  # noqa: F821
+TrackT = TypeVar("TrackT", bound="Track")
 
 # For general use in lists that can contain mixed types of tracks.
 # list[Track] won't work because list is invariant.
 # TODO: Add Chapter?
-AnyTrack = Union["Video", "Audio", "Subtitle"]  # noqa: F821
+AnyTrack = Union["Video", "Audio", "Subtitle"]

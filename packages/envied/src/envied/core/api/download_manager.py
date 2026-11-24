@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import importlib
 import json
 import logging
 import os
@@ -14,12 +15,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
 
 from envied.core.api.events import bus, publish_service_event
 from envied.core.api.sanitize import sanitize_log
-from envied.core.utils.click_types import AUDIO_CODEC_LIST, VIDEO_CODEC_LIST
-from envied.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_path, redact_text
+from envied.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
+from envied.core.utils.service_params import cast_service_options, service_options
+
+if TYPE_CHECKING:
+    from envied.core.service import Service
 
 log = logging.getLogger("download_manager")
 
@@ -87,6 +91,7 @@ class JobStatus(Enum):
     CANCELLED = "cancelled"
 
 
+WORKER_STDERR_LIMIT = 64 * 1024
 # Statuses a job can never leave; such jobs are safe to remove or retry.
 TERMINAL_STATUSES = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
 
@@ -132,18 +137,22 @@ class DownloadJob:
     # Subtitles skipped under skip_subtitle_errors (non-fatal). Each entry is a dl.SkippedSubtitle
     # dict (id / language / title) so a client can report which weren't available.
     skipped_subtitles: List[Dict[str, Any]] = field(default_factory=list)
+    # Titles skipped because a requested track or language is missing; each a dl.SkippedTitle (title / reason).
+    skipped_titles: List[Dict[str, Any]] = field(default_factory=list)
 
     cancel_event: threading.Event = field(default_factory=threading.Event)
 
     # Guards against writing the same job to the persistent history file twice.
     history_recorded: bool = False
 
+    redacted: Optional[tuple[tuple, Dict[str, Optional[str]]]] = field(default=None, repr=False, compare=False)
+
     # X-Secret-Key that created the job; scopes per-caller access, never serialized into to_dict().
     owner_key: Optional[str] = None
 
     def to_dict(self, include_full_details: bool = False) -> Dict[str, Any]:
         """Convert job to dictionary for JSON response."""
-        result = {
+        result: Dict[str, Any] = {
             "job_id": self.job_id,
             "status": self.status.value,
             "created_time": self.created_time.isoformat(),
@@ -161,6 +170,7 @@ class DownloadJob:
             "segments_total": self.segments_total,
             "speed": self.speed,
             "skipped_subtitles": self.skipped_subtitles,
+            "skipped_titles": self.skipped_titles,
             "input_prompt": self.input_prompt,
             "notice": self.notice,
         }
@@ -168,17 +178,21 @@ class DownloadJob:
         if include_full_details:
             # Error/stderr/traceback are free text a service may have echoed a credential or proxy
             # URL into, so scrub them with the same secrets that redact_parameters masks.
+            raw = (self.error_message, self.error_details, self.error_traceback, self.worker_stderr)
+            if not self.redacted or self.redacted[0] != raw:
+                names = ("error_message", "error_details", "error_traceback", "worker_stderr")
+                self.redacted = (
+                    raw,
+                    {name: redact_path(_redact_text(text, self.parameters)) for name, text in zip(names, raw)},
+                )
             result.update(
                 {
                     "parameters": redact_parameters(self.parameters),
                     "started_time": self.started_time.isoformat() if self.started_time else None,
                     "completed_time": self.completed_time.isoformat() if self.completed_time else None,
                     "output_files": self.output_files,
-                    "error_message": redact_path(_redact_text(self.error_message, self.parameters)),
-                    "error_details": redact_path(_redact_text(self.error_details, self.parameters)),
                     "error_code": self.error_code,
-                    "error_traceback": redact_path(_redact_text(self.error_traceback, self.parameters)),
-                    "worker_stderr": redact_path(_redact_text(self.worker_stderr, self.parameters)),
+                    **self.redacted[1],
                 }
             )
 
@@ -221,6 +235,7 @@ def record_job_history(job: DownloadJob) -> None:
         "created_time": job.created_time.isoformat(),
         "completed_time": job.completed_time.isoformat() if job.completed_time else None,
         "output_files": job.output_files,
+        "skipped_titles": job.skipped_titles,
         "parameters": redact_parameters(job.parameters),
         "error_message": _redact_text(job.error_message, job.parameters),
     }
@@ -322,26 +337,9 @@ def delete_job_history(job_id: str, allowed: Optional[set] = None, owner: Option
     return True
 
 
-def to_enum(values: List[str], enum_cls: type[Enum]) -> List[Enum]:
-    """Map case-insensitive strings (by member name or value) to enum members, dropping unknowns."""
-    lookup = {m.name.upper(): m for m in enum_cls}
-    lookup.update({str(m.value).upper(): m for m in enum_cls})
-    return [lookup[v.upper()] for v in values if v.upper() in lookup]
-
-
-def normalize_sub_format(sub_format_raw: str) -> Any:
-    """Normalise an API sub_format string to what dl.py expects.
-
-    "original" is a sentinel meaning "keep source format" (dl.py skips conversion), so it must
-    pass through unchanged to match the CLI (SubtitleCodecChoice returns the same string). Any
-    other value maps to a Subtitle.Codec, or None when unrecognized.
-    """
-    from envied.core.tracks import Subtitle
-
-    if sub_format_raw.lower() == "original":
-        return "original"
-    mapped = to_enum([sub_format_raw], Subtitle.Codec)
-    return mapped[0] if mapped else None
+def client_sent_keys(params: Dict[str, Any]) -> set[str]:
+    """Pop the server's ``client_keys`` stamp; a job without one counts every parameter as client-sent."""
+    return set(params.pop("client_keys", params))
 
 
 def perform_download(
@@ -353,11 +351,11 @@ def perform_download(
 ) -> List[str]:
     """Do the synchronous download work for a job.
 
-    `params` holds the API's string form of the `dl` options. This function normalizes `params` in
-    place before dl.result() sees it: vcodec and range names become enums, `slow` accepts "MIN-MAX", a two-item
-    list, or True (which means 60-120), and `wanted` accepts forms such as "S01E01", "S01-S03",
-    "s1e1", or "1x1" as well as the internal "SxE" form. Music takes track numbers in the same
-    field, such as "1-5" or "2x3" for disc 2 track 3.
+    `params` holds the API's string form of the `dl` options. The function first normalizes the API-shaped
+    options in place: `slow` accepts "MIN-MAX", a two-item list, or True (which means 60-120), and `wanted`
+    accepts forms such as "S01E01", "S01-S03", "s1e1", or "1x1" as well as the internal "SxE" form. Music takes track
+    numbers in the same field, such as "1-5" or "2x3" for disc 2 track 3. Then each dl click type casts its option
+    into ``ctx.params``, which feeds dl() and dl.result() as on the CLI.
     """
 
     from contextlib import redirect_stderr, redirect_stdout
@@ -365,13 +363,11 @@ def perform_download(
 
     # Import dl.py components lazily to avoid circular deps during module import
     import click
-    import yaml
 
     from envied.commands.dl import dl
     from envied.core.api.errors import APIError, APIErrorCode
-    from envied.core.config import config
+    from envied.core.config import config, load_yaml
     from envied.core.services import Services
-    from envied.core.tracks import Video
     from envied.core.utils.click_types import ContextData
     from envied.core.utils.collections import merge_dict
 
@@ -393,39 +389,7 @@ def perform_download(
         if params.pop(banned, None) is not None:
             log.warning(f"Ignoring '{banned}' in API download parameters; post-scripts are config-only")
 
-    vcodec_raw = params.get("vcodec")
-    if vcodec_raw:
-        params["vcodec"] = VIDEO_CODEC_LIST.convert(vcodec_raw)
-    else:
-        params["vcodec"] = []
-
-    if params.get("acodec"):
-        params["acodec"] = AUDIO_CODEC_LIST.convert(params["acodec"])
-
-    range_raw = params.get("range")
-    if range_raw:
-        if isinstance(range_raw, str):
-            range_raw = [range_raw]
-        if isinstance(range_raw, list) and range_raw and not isinstance(range_raw[0], Video.Range):
-            params["range"] = to_enum(range_raw, Video.Range)
-    else:
-        params["range"] = [Video.Range.SDR]
-
-    sub_format_raw = params.get("sub_format")
-    if sub_format_raw and isinstance(sub_format_raw, str):
-        params["sub_format"] = normalize_sub_format(sub_format_raw)
-
-    if params.get("export"):
-        params["export"] = bool(params["export"])
-
-    sample_raw = params.get("sample")
-    if sample_raw is not None:
-        from envied.core.utils.click_types import SAMPLE_RANGE
-
-        try:
-            params["sample"] = SAMPLE_RANGE.convert(sample_raw, None, None)
-        except click.BadParameter as exc:
-            raise Exception(f"Invalid sample parameter: {exc}")
+    client_keys = client_sent_keys(params)
 
     slow_raw = params.get("slow")
     if slow_raw is not None and not isinstance(slow_raw, tuple):
@@ -454,53 +418,33 @@ def perform_download(
             season_range = SeasonRange()
             params["wanted"] = season_range.parse_tokens(*wanted_raw)
 
-    service_config_path = Services.get_path(service) / config.filenames.config
-    if service_config_path.exists():
-        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+    remote = params.get("remote")
+    service_config_path = None if remote else Services.get_path(service) / config.filenames.config
+    if service_config_path and service_config_path.exists():
+        service_config = load_yaml(service_config_path)
     else:
         service_config = {}
-    merge_dict(config.services.get(service), service_config)
+    merge_dict(config.services.get(service) or {}, service_config)
 
     from envied.commands.dl import dl as dl_command
 
     ctx = click.Context(dl_command.cli)
     ctx.invoked_subcommand = service
-    from envied.core.api.handlers import load_full_cdm
+    from envied.core.api.handlers import cast_dl_params, load_full_cdm, relay_label
 
     cdm = load_full_cdm(service, params.get("profile"), params.get("cdm_type"))
     ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=[], profile=params.get("profile"))
+    try:
+        dl_params = cast_dl_params(dl_command.cli, params)
+    except click.BadParameter as exc:
+        raise APIError(APIErrorCode.INVALID_PARAMETERS, exc.message)
     ctx.params = {
-        "proxy": params.get("proxy"),
-        "no_proxy": params.get("no_proxy", False),
-        "no_proxy_download": params.get("no_proxy_download", False),
-        "proxy_download": params.get("proxy_download"),
-        "profile": params.get("profile"),
+        **dl_params,
         "cdm_name": params.get("cdm"),
-        "all_drm": params.get("all_drm", False),
-        "repack": params.get("repack", False),
-        "tag": params.get("tag"),
-        "tmdb_id": params.get("tmdb_id"),
-        "imdb_id": params.get("imdb_id"),
-        "tvdb_id": params.get("tvdb_id"),
-        "tvdb_order": params.get("tvdb_order"),
-        "anilist_id": params.get("anilist_id"),
-        "enrich": params.get("enrich", False),
-        "daily": params.get("daily", False),
-        "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
-        "no_cache": params.get("no_cache", False),
-        "reset_cache": params.get("reset_cache", False),
-        # Track-selection params read by Service.__init__ via ctx.parent.params
-        "quality": params.get("quality", []),
-        "vcodec": params.get("vcodec", []),
-        "range_": params.get("range", [Video.Range.SDR]),
-        "best_available": params.get("best_available", False),
-        # services read these here, not from dl.result(), to pick the manifests they fetch
-        "acodec": params.get("acodec") or [],
-        "lang": params.get("lang", ["orig"]),
-        "v_lang": params.get("v_lang", []),
-        "a_lang": params.get("a_lang", []),
-        "forced_subs": params.get("forced_subs", False),
-        "exact_lang": params.get("exact_lang", False),
+        # dl skips the local service config and guards the proxy for a remote_services server
+        "remote": bool(remote),
+        "server": remote,
+        "client_argv": f"{relay_label(params)} download job {job_id}",
     }
     # Hand-built context: record parameter sources so service dl overrides
     # apply to defaults but never clobber client-sent values.
@@ -509,26 +453,10 @@ def perform_download(
     for param_name in ctx.params:
         source_key = "range" if param_name == "range_" else param_name
         ctx.set_parameter_source(
-            param_name, ParameterSource.COMMANDLINE if source_key in params else ParameterSource.DEFAULT
+            param_name, ParameterSource.COMMANDLINE if source_key in client_keys else ParameterSource.DEFAULT
         )
 
-    dl_instance = dl(
-        ctx=ctx,
-        no_proxy=params.get("no_proxy", False),
-        proxy_providers=None if params.get("server_proxy") is True else [],
-        profile=params.get("profile"),
-        proxy=params.get("proxy"),
-        repack=params.get("repack", False),
-        tag=params.get("tag"),
-        tmdb_id=params.get("tmdb_id"),
-        imdb_id=params.get("imdb_id"),
-        tvdb_id=params.get("tvdb_id"),
-        tvdb_order=params.get("tvdb_order"),
-        anilist_id=params.get("anilist_id"),
-        enrich=params.get("enrich", False),
-        daily=params.get("daily", False),
-        output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
-    )
+    dl_instance = dl(ctx=ctx, proxy_providers=None if params.get("server_proxy") is True else [], **ctx.params)
     # Per-request credential ("user:pass"); feed it into the map get_credentials() reads so a
     # client can authenticate without anything being persisted to disk. Without a profile,
     # get_credentials() falls back to "default", so store it there too rather than dropping it
@@ -539,47 +467,45 @@ def perform_download(
             config.credentials[service] = svc_creds = {}
         svc_creds[params.get("profile") or "default"] = params["credential"]
 
-    service_module = Services.load(service)
+    service_ctx = click.Context(click.Command(service), parent=ctx, obj=ctx.obj)
+    if remote:
+        from envied.core.remote_service import make_remote_service
 
-    try:
-        import inspect
+        # RemoteService duck-types Service for dl.result()
+        service_instance = cast("Service", make_remote_service(service_ctx, remote, service, title_id, params))
+    else:
+        service_module = Services.load(service)
 
-        service_init_params = inspect.signature(service_module.__init__).parameters
+        try:
+            import inspect
 
-        service_ctx = click.Context(click.Command(service))
-        service_ctx.parent = ctx
-        service_ctx.obj = ctx.obj
+            service_init_params = inspect.signature(service_module.__init__).parameters
 
-        service_kwargs = {}
+            service_kwargs: Dict[str, Any] = {}
 
-        if "title" in service_init_params:
-            service_kwargs["title"] = title_id
+            if "title" in service_init_params:
+                service_kwargs["title"] = title_id
 
-        for key, value in params.items():
-            if key in service_init_params and key not in ["service", "title_id", "profile", "service_params"]:
-                service_kwargs[key] = value
-        service_params = params.get("service_params")
-        if isinstance(service_params, dict):
-            for key, value in service_params.items():
-                if key in service_init_params and key != "title":
-                    service_kwargs[key] = value
+            cli_params = getattr(getattr(service_module, "cli", None), "params", None) or []
+            options = service_options(params, service_init_params.keys() - {"title"})
+            service_kwargs.update(cast_service_options(cli_params, service_ctx, options))
 
-        for param_name, param_info in service_init_params.items():
-            if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
-                if param_info.default is inspect.Parameter.empty:
-                    if param_name == "movie":
-                        service_kwargs[param_name] = "/movies/" in title_id
-                    elif param_name == "meta_lang":
-                        service_kwargs[param_name] = None
-                    else:
-                        log.warning(f"Unknown required parameter '{param_name}' for service {service}, using None")
-                        service_kwargs[param_name] = None
+            for param_name, param_info in service_init_params.items():
+                if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
+                    if param_info.default is inspect.Parameter.empty:
+                        if param_name == "movie":
+                            service_kwargs[param_name] = "/movies/" in title_id
+                        elif param_name == "meta_lang":
+                            service_kwargs[param_name] = None
+                        else:
+                            log.warning(f"Unknown required parameter '{param_name}' for service {service}, using None")
+                            service_kwargs[param_name] = None
 
-        service_instance = service_module(service_ctx, **service_kwargs)
+            service_instance = service_module(service_ctx, **service_kwargs)
 
-    except Exception as exc:  # noqa: BLE001 - propagate meaningful failure
-        log.error(f"Failed to create service instance: {exc}")
-        raise
+        except Exception as exc:  # noqa: BLE001 - propagate meaningful failure
+            log.error(f"Failed to create service instance: {exc}")
+            raise
 
     original_download_dir = config.directories.downloads
 
@@ -592,92 +518,31 @@ def perform_download(
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
             dl_instance.result(
                 service=service_instance,
-                quality=params.get("quality", []),
-                vcodec=params.get("vcodec", []),
-                acodec=ctx.params["acodec"],
-                vbitrate=params.get("vbitrate"),
-                abitrate=params.get("abitrate"),
-                vbitrate_range=params.get("vbitrate_range"),
-                abitrate_range=params.get("abitrate_range"),
-                range_=params.get("range", ["SDR"]),
-                channels=params.get("channels"),
-                no_atmos=params.get("no_atmos", False),
-                select_titles=False,
-                wanted=params.get("wanted", []),
-                latest_episode=params.get("latest_episode", False),
-                latest_episodes=params.get("latest_episodes"),
-                lang=ctx.params["lang"],
-                v_lang=ctx.params["v_lang"],
-                a_lang=ctx.params["a_lang"],
-                s_lang=params.get("s_lang", ["all"]),
-                require_audio=params.get("require_audio", []),
-                require_video=params.get("require_video", []),
-                require_subs=params.get("require_subs", []),
-                forced_subs=ctx.params["forced_subs"],
-                forced_subs_only=params.get("forced_subs_only", False),
-                forced_s_lang=params.get("forced_s_lang", []),
-                exact_lang=params.get("exact_lang", False),
-                sub_format=params.get("sub_format"),
-                video_only=params.get("video_only", False),
-                audio_only=params.get("audio_only", False),
-                subs_only=params.get("subs_only", False),
-                chapters_only=params.get("chapters_only", False),
-                no_subs=params.get("no_subs", False),
-                skip_subtitle_errors=params.get("skip_subtitle_errors", False),
-                no_audio=params.get("no_audio", False),
-                no_chapters=params.get("no_chapters", False),
-                no_video=params.get("no_video", False),
-                no_attachments=params.get("no_attachments", False),
-                audio_description=params.get("audio_description", False),
-                audio_description_only=params.get("audio_description_only", False),
-                slow=params.get("slow", None),
-                list_=False,
-                list_titles=False,
-                skip_dl=params.get("skip_dl", False),
-                all_drm=params.get("all_drm", False),
-                export=params.get("export"),
-                cdm_only=params.get("cdm_only"),
-                no_proxy=params.get("no_proxy", False),
-                no_proxy_download=params.get("no_proxy_download", False),
-                proxy_download=params.get("proxy_download"),
-                no_folder=params.get("no_folder", False),
-                no_source=params.get("no_source", False),
-                no_mux=params.get("no_mux", False),
-                sample=params.get("sample"),
-                include_sample=params.get("include_sample", False),
-                workers=params.get("workers"),
-                adaptive_workers=params.get("adaptive_workers", False),
-                download_processes=params.get("download_processes", 1),
-                continue_downloads=params.get("continue_downloads", False),
-                downloads=params.get("downloads", 1),
-                worst=params.get("worst", False),
-                best_available=params.get("best_available", False),
-                split_audio=params.get("split_audio"),
+                **{**ctx.params, "select_titles": False, "list_": False, "list_titles": False},
                 progress_sink=progress_callback,
             )
 
     except SystemExit as exc:
         if exc.code != 0:
-            stdout_str = stdout_capture.getvalue()
-            stderr_str = stderr_capture.getvalue()
             log.error(f"Download exited with code {exc.code}")
-            log.error(f"Stdout: {stdout_str}")
-            log.error(f"Stderr: {stderr_str}")
+            log.debug("Stdout: %s", stdout_capture.getvalue())
+            log.debug("Stderr: %s", stderr_capture.getvalue())
+            if reason := getattr(dl_instance, "stop_reason", None):
+                raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed: {reason}")
             raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed with exit code {exc.code}")
 
     except Exception as exc:  # noqa: BLE001 - propagate to caller
-        stdout_str = stdout_capture.getvalue()
-        stderr_str = stderr_capture.getvalue()
         log.error(f"Download execution failed: {exc}")
-        log.error(f"Stdout: {stdout_str}")
-        log.error(f"Stderr: {stderr_str}")
+        log.debug("Stdout: %s", stdout_capture.getvalue())
+        log.debug("Stderr: %s", stderr_capture.getvalue())
         raise
 
     # dl.result() catches a download-worker exception, reports it, but returns normally (exit 0).
-    # It sets download_failed in that case, so the job isn't reported as completed with no output.
-    if getattr(dl_instance, "download_failed", False):
-        detail = (stdout_capture.getvalue() + stderr_capture.getvalue())[-200:].strip()
-        raise APIError(APIErrorCode.WORKER_ERROR, "download worker failed: " + (detail or "see logs"))
+    # It keeps the error in download_error, so the job isn't reported as completed with no output.
+    if (error := getattr(dl_instance, "download_error", None)) is not None:
+        # segment URLs carry signed CDN tokens (hmac, session IDs) that redact_text does not match
+        detail = redact_all(dl_instance.failure_lines(error)[1].strip())
+        raise APIError(APIErrorCode.WORKER_ERROR, f"download worker failed: {detail}")
 
     if progress_callback:
         skipped_subs = getattr(dl_instance, "skipped_subtitles", None)
@@ -693,7 +558,7 @@ def perform_download(
 class DownloadQueueManager:
     """Manages download job queue with configurable concurrency limits."""
 
-    def __init__(self, max_concurrent_downloads: int = 2, job_retention_hours: int = 24):
+    def __init__(self, max_concurrent_downloads: int = 2, job_retention_hours: int = 24) -> None:
         self.max_concurrent_downloads = max_concurrent_downloads
         self.job_retention_hours = job_retention_hours
 
@@ -713,8 +578,13 @@ class DownloadQueueManager:
             f"Initialized download queue manager: max_concurrent={max_concurrent_downloads}, retention_hours={job_retention_hours}"
         )
 
-    def create_job(self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters) -> DownloadJob:
+    def create_job(
+        self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters: Any
+    ) -> DownloadJob:
         """Make a new download job and add it to the queue."""
+        from envied.core.api.session_store import refuse_while_draining
+
+        refuse_while_draining()
         job_id = str(uuid.uuid4())
         job = DownloadJob(
             job_id=job_id,
@@ -759,11 +629,12 @@ class DownloadQueueManager:
 
     def publish(self, job: DownloadJob, event: str) -> None:
         """Fan an event carrying the job's full detail dict out to every listener."""
-        bus.publish("job", {"event": event, **job.to_dict(include_full_details=True)})
+        data = job.to_dict(include_full_details=True)
+        bus.publish("job", {"event": event, **data})
         queues = self._subscribers.get(job.job_id)
         if not queues:
             return
-        payload = {"event": event, "data": job.to_dict(include_full_details=True)}
+        payload = {"event": event, "data": data}
         for queue in queues:
             self.put(queue, payload)
 
@@ -883,7 +754,7 @@ class DownloadQueueManager:
         jobs_to_remove = []
 
         for job_id, job in self._jobs.items():
-            if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+            if job.status in TERMINAL_STATUSES:
                 if job.completed_time and job.completed_time < cutoff_time:
                     jobs_to_remove.append(job_id)
                 elif not job.completed_time and job.created_time < cutoff_time:
@@ -897,7 +768,7 @@ class DownloadQueueManager:
 
         return len(jobs_to_remove)
 
-    async def start_workers(self):
+    async def start_workers(self) -> None:
         """Start job worker tasks to process the download queue."""
         if self._workers_started:
             return
@@ -913,7 +784,7 @@ class DownloadQueueManager:
 
         log.info(f"Started {self.max_concurrent_downloads} download workers")
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown the queue manager and cancel all active downloads."""
         log.info("Shutting down download queue manager")
         self._shutdown_event.set()
@@ -957,7 +828,7 @@ class DownloadQueueManager:
         if self._active_downloads:
             await asyncio.gather(*self._active_downloads.values(), return_exceptions=True)
 
-    async def download_worker(self, worker_name: str):
+    async def download_worker(self, worker_name: str) -> None:
         """Job worker task that processes jobs from the queue."""
         log.debug(f"Download worker {worker_name} started")
 
@@ -1007,7 +878,7 @@ class DownloadQueueManager:
             except Exception as e:
                 log.error(f"Worker {worker_name} error: {e}")
 
-    async def execute_download(self, job: DownloadJob):
+    async def execute_download(self, job: DownloadJob) -> None:
         """Do the actual download for a job."""
         log.info(f"Executing download for job {job.job_id}")
 
@@ -1035,6 +906,15 @@ class DownloadQueueManager:
             log.error(f"Download failed for job {job.job_id}: {e}")
             raise
 
+    def worker_speed_limit(self) -> Optional[float]:
+        """Return one job worker's share of the locked global speed limit, or None when unset."""
+        requests_downloader = importlib.import_module("envied.core.downloaders.requests")
+
+        limiter = requests_downloader.speed_limiter
+        if not (requests_downloader.speed_limit_locked and limiter):
+            return None
+        return limiter.rate / max(1, self.max_concurrent_downloads)
+
     async def run_download_async(self, job: DownloadJob) -> List[str]:
         """Invoke a job worker subprocess to do the download."""
 
@@ -1043,6 +923,7 @@ class DownloadQueueManager:
             "service": job.service,
             "title_id": job.title_id,
             "parameters": job.parameters,
+            "speed_limit": self.worker_speed_limit(),
         }
 
         payload_fd, payload_path = tempfile.mkstemp(prefix=f"unshackle_job_{job.job_id}_", suffix="_payload.json")
@@ -1086,11 +967,8 @@ class DownloadQueueManager:
         try:
             while True:
                 done, _ = await asyncio.wait({communicate_task}, timeout=0.5)
-                if communicate_task in done:
-                    stdout_bytes, stderr_bytes = communicate_task.result()
-                    break
 
-                # Check for progress updates (skip re-parse when the file hasn't changed since last tick)
+                # Read progress before the exit check so the worker's last write lands (skip an unchanged file)
                 try:
                     stat = os.stat(progress_path)
                     stat_key = (stat.st_mtime_ns, stat.st_size)
@@ -1128,11 +1006,13 @@ class DownloadQueueManager:
                                 job.notice = progress_data["notice"]
                             if progress_data.get("skipped_subtitles"):
                                 job.skipped_subtitles = progress_data["skipped_subtitles"]
+                            if progress_data.get("skipped_titles"):
+                                job.skipped_titles = progress_data["skipped_titles"]
                             if "progress" in progress_data:
                                 new_progress = float(progress_data["progress"])
                                 if new_progress != job.progress:
                                     job.progress = new_progress
-                                    log.info(f"Job {job.job_id} progress updated: {job.progress}%")
+                                    log.debug(f"Job {job.job_id} progress updated: {job.progress}%")
                             # submit_input() clears the prompt out of band, so a re-prompt with the same text
                             # leaves the file equal to last_published; publish the prompt change anyway.
                             if progress_data != last_published or job.input_prompt != prompt_before:
@@ -1141,6 +1021,10 @@ class DownloadQueueManager:
                         last_progress_stat = stat_key
                 except (OSError, json.JSONDecodeError, ValueError) as e:
                     log.debug(f"Could not read progress for job {job.job_id}: {e}")
+
+                if communicate_task in done:
+                    stdout_bytes, stderr_bytes = communicate_task.result()
+                    break
 
                 if job.cancel_event.is_set() or job.status == JobStatus.CANCELLED:
                     log.info(f"Cancellation detected for job {job.job_id}, terminating worker process")
@@ -1164,7 +1048,7 @@ class DownloadQueueManager:
             if stdout.strip():
                 log.debug(f"Worker stdout for job {job.job_id}: {safe_stdout}")
             if stderr.strip():
-                job.worker_stderr = stderr.strip()
+                job.worker_stderr = stderr.strip()[-WORKER_STDERR_LIMIT:]
                 if returncode != 0:
                     log.warning(f"Worker stderr for job {job.job_id}: {safe_stderr}")
                 else:
@@ -1221,7 +1105,7 @@ class DownloadQueueManager:
                 except OSError:
                     pass
 
-    async def cleanup_worker(self):
+    async def cleanup_worker(self) -> None:
         """Job worker that periodically cleans up old jobs."""
         while not self._shutdown_event.is_set():
             try:

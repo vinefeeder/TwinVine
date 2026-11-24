@@ -1,22 +1,26 @@
 import random
 import re
 import subprocess
+from functools import cached_property
 from typing import Optional
 
 from envied.core import binaries
-from envied.core.proxies.proxy import Proxy
+from envied.core.proxies.proxy import Proxy, cached_catalogue
 
 
 class Hola(Proxy):
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Proxy provider that uses Hola's direct connections through the hola-proxy binary.
         """
-        self.binary = binaries.HolaProxy
-        if not self.binary:
+        if not binaries.HolaProxy:
             raise EnvironmentError("hola-proxy executable not found but is required for the Hola proxy provider.")
+        self.binary = binaries.HolaProxy
 
-        self.countries = self.get_countries()
+    @cached_property
+    def countries(self) -> list[dict[str, str]]:
+        """Fetched on first use, so a run that wants no proxy makes no request."""
+        return self.get_countries()
 
     def __repr__(self) -> str:
         countries = len(self.countries)
@@ -37,7 +41,7 @@ class Hola(Proxy):
             return None
 
         ban = "Transaction error: temporary ban detected."
-        banned = ConnectionError("Hola banned your IP temporarily from it's services. Try change your IP.")
+        banned = ConnectionError("Hola temporarily banned your IP")
         try:
             # hola-proxy logs to stderr from another thread, so a merged stream splits the Login/Password lines.
             result = subprocess.run(
@@ -71,6 +75,7 @@ class Hola(Proxy):
 
         return random.choice(proxies) if proxies else None
 
+    @cached_catalogue
     def get_countries(self) -> list[dict[str, str]]:
         """Get a list of available Countries."""
         p = subprocess.run(

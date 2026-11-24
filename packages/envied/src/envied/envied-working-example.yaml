@@ -17,6 +17,7 @@ decryption:
   default: shaka
   ALL4: mp4decrypt
   TPTV: mp4decrypt
+  PLUTO: mp4decrypt
 
 # Custom output templates for filenames
 # Configure output_template in your envied.yaml to control filename format.

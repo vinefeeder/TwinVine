@@ -2,12 +2,15 @@ import base64
 from typing import Any, Union
 from uuid import UUID
 
+from envied.core.drm.blowfish_stripe import BlowfishStripe
 from envied.core.drm.clearkey import ClearKey
 from envied.core.drm.clearkey_cenc import ClearKeyCENC
 from envied.core.drm.monalisa import MonaLisa
 from envied.core.drm.playready import PlayReady
 from envied.core.drm.widevine import Widevine
+from envied.core.vault import is_null_key
 
+# BlowfishStripe stays out: the licensing paths typed on DRM_T never receive a DRM that needs no licence
 DRM_T = Union[ClearKey, ClearKeyCENC, Widevine, PlayReady, MonaLisa]
 
 
@@ -48,6 +51,14 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
     return drm
 
 
+def drop_null_keys(drm: Any) -> None:
+    """Remove the null keys from a DRM object's content keys. A read-only key view stays as it is."""
+    content_keys = getattr(drm, "content_keys", None)
+    if isinstance(content_keys, dict):
+        for kid in [kid for kid, key in content_keys.items() if is_null_key(key)]:
+            del content_keys[kid]
+
+
 def real_kids(drm: Any) -> list[UUID]:
     """Return the KIDs a DRM object names, without the all-zero and test-pattern placeholders."""
     return [kid for kid in getattr(drm, "kids", None) or [] if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
@@ -61,6 +72,7 @@ def own_kids(drm: Any) -> list[UUID]:
 
 
 __all__ = (
+    "BlowfishStripe",
     "ClearKey",
     "ClearKeyCENC",
     "Widevine",
@@ -68,6 +80,8 @@ __all__ = (
     "MonaLisa",
     "DRM_T",
     "drm_from_dict",
+    "drop_null_keys",
+    "is_null_key",
     "real_kids",
     "own_kids",
 )

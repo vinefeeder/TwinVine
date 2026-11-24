@@ -12,8 +12,9 @@ from Cryptodome.Util.Padding import unpad
 from m3u8.model import Key
 from requests import Session
 
-from envied.core.session import RnetSession
+from envied.core.session import AnySession, RnetSession
 from envied.core.utilities import log_event
+from envied.core.utils import run_proxy
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ TS_SYNC_CHECKS = 4
 class ClearKey:
     """AES-128 ClearKey (HLS) DRM system."""
 
-    def __init__(self, key: Union[bytes, str], iv: Optional[Union[bytes, str]] = None):
+    def __init__(self, key: Union[bytes, str], iv: Optional[Union[bytes, str]] = None) -> None:
         """
         Give the IV where possible. If you do not give an IV, unshackle sets it to
         \x00 of the same bit-size as the content key.
@@ -103,7 +104,7 @@ class ClearKey:
         shutil.move(decrypted_path, path)
 
     @classmethod
-    def from_m3u_key(cls, m3u_key: Key, session: Optional[Session] = None) -> ClearKey:
+    def from_m3u_key(cls, m3u_key: Key, session: Optional[AnySession] = None) -> ClearKey:
         """
         Load a ClearKey from an M3U(8) Playlist's EXT-X-KEY.
 
@@ -124,7 +125,7 @@ class ClearKey:
             raise ValueError("No URI in M3U Key, unable to get Key.")
 
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
 
         if not session.headers.get("User-Agent"):
             # commonly needed default for HLS playlists
