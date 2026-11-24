@@ -131,12 +131,12 @@ key_vaults:
 #  name: Local vault
 #  path: key_store.db
 
-- type: HTTP
-  name: drmlab
-  host: http://api.drmlab.io/vault/
-  password: N7kQp4XzL2mV8cHrY9tFw5BjUa6DeGs3
-  api_mode: json
-  no_push: true
+#- type: HTTP
+#  name: drmlab
+#  host: http://api.drmlab.io/vault/
+#  password: N7kQp4XzL2mV8cHrY9tFw5BjUa6DeGs3
+#  api_mode: json
+#  no_push: true
 
 - type: API
   name: LibreDRM Vault
